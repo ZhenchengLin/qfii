@@ -109,7 +109,8 @@ def _rules(rules: Committee, portfolio: dict[str, Any] | None = None) -> dict[st
     cap = max_new_order_usd(portfolio) if portfolio else None
     return {
         "largest_allowed_order_usd": cap,
-        "trade_rule": rules.invest_rule, "procedural_rule": rules.procedural_rule,
+        "trade_rule": rules.invest_rule, "pass_rule": rules.pass_rule,
+        "procedural_rule": rules.procedural_rule,
         "size_tolerance_pct": rules.size_tolerance_pct,
     }
 

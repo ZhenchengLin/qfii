@@ -76,6 +76,7 @@ class DebateServer:
             "papers": count_by_state(self.conn),
             "committee": {"max_rounds": cfg.committee.max_rounds,
                           "trade_rule": cfg.committee.invest_rule,
+                          "pass_rule": cfg.committee.pass_rule,
                           "procedural_rule": cfg.committee.procedural_rule},
             "active_run": self.active.id if self.active and not self.active.done else None,
         }

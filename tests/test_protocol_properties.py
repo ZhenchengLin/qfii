@@ -34,11 +34,13 @@ def random_ballot(rng: random.Random, member: str, on_table: list[str]) -> Ballo
 
 
 @pytest.mark.parametrize("rule", ["unanimous", "majority"])
+@pytest.mark.parametrize("pass_rule", ["unanimous", "majority"])
 @pytest.mark.parametrize("info_rule", ["any", "majority"])
-def test_tally_invariants(rule, info_rule):
-    rng = random.Random(f"{rule}-{info_rule}")
-    rules = replace(BASE, invest_rule=rule, info_request_rule=info_rule)
+def test_tally_invariants(rule, pass_rule, info_rule):
+    rng = random.Random(f"{rule}-{pass_rule}-{info_rule}")
+    rules = replace(BASE, invest_rule=rule, pass_rule=pass_rule, info_request_rule=info_rule)
     need = votes_needed(rule)
+    pass_need = votes_needed(pass_rule)
     for _ in range(3000):
         on_table = rng.sample(["A1", "A2"], rng.randint(0, 2))
         ballots = [random_ballot(rng, m, on_table) for m in MEMBERS]
@@ -59,14 +61,14 @@ def test_tally_invariants(rule, info_rule):
             assert len(backers) >= need and out.amendment_id in amendments
             assert out.size_usd == amendments[out.amendment_id]["size_usd"]
         if out.kind == "pass":
-            assert actions.count("pass") >= need
+            assert actions.count("pass") >= pass_need
         if out.kind == "send_back":
             assert actions.count("send_back") >= votes_needed(rules.procedural_rule)
         if out.kind == "request_info":
             assert actions.count("request_info") >= (1 if info_rule == "any" else 2)
         if out.kind == "continue":
             # nothing that would have decided the round was ignored
-            assert actions.count("pass") < need
+            assert actions.count("pass") < pass_need
             assert actions.count("send_back") < votes_needed(rules.procedural_rule)
         # abstentions never decide anything
         if actions.count("abstain") == 3:

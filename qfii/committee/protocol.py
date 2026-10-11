@@ -10,8 +10,8 @@ Three members, equal weight. Each round every member casts one ballot:
   propose       put an amended deal on the table (size + terms); counts as backing it
   support       back an amendment already on the table, by its id (A1, A2, ...)
 
-Trading actions (invest, replace, pass) need `invest_rule` votes; invest and
-replace also need agreement on the size (all within size_tolerance_pct; the
+Trading actions invest and replace need `invest_rule` votes, pass needs
+`pass_rule` votes; invest and replace also need agreement on the size (all within size_tolerance_pct; the
 median is used) and, for replace, on which position to sell. Backing the same
 amendment (propose + support) also needs `invest_rule` votes; its terms are
 fixed, so that is agreement on the size and terms. Procedural actions
@@ -74,10 +74,11 @@ def tally(ballots: list[Ballot], rules: Committee,
         by_action.setdefault(b.action, []).append(b)
 
     trade_need = votes_needed(rules.invest_rule, len(ballots))
+    pass_need = votes_needed(rules.pass_rule, len(ballots))
     blocked: list[str] = []
     for action in TRADE_ACTIONS:
         group = by_action.get(action, [])
-        if len(group) < trade_need:
+        if len(group) < (pass_need if action == "pass" else trade_need):
             continue
         if action == "pass":
             return RoundOutcome("pass", votes, detail=f"{len(group)} of {len(ballots)} pass")
@@ -127,4 +128,5 @@ def tally(ballots: list[Ballot], rules: Committee,
                             detail=f"{len(asks)} of {len(ballots)} asked for information")
 
     return RoundOutcome("continue", votes, detail="; ".join(blocked) or "no action reached "
-                        f"its threshold (trade needs {trade_need}, procedural needs {proc_need})")
+                        f"its threshold (trade needs {trade_need}, pass needs {pass_need}, "
+                        f"procedural needs {proc_need})")

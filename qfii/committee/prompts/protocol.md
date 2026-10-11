@@ -37,7 +37,8 @@ Ballot actions (equal weight):
   If all members back the same amendment, it is the decision, on its terms.
 
 A trade needs the number of votes in rules.trade_rule, and the sizes must be
-within rules.size_tolerance_pct of each other. A replace also needs agreement
+within rules.size_tolerance_pct of each other. Deciding not to invest needs the
+number of votes in rules.pass_rule. A replace also needs agreement
 on which position to sell. Backing the same amendment is agreement on its exact
 terms.
 

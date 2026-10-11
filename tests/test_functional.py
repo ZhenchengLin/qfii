@@ -141,6 +141,9 @@ def test_cli_debate_eval_and_ask_team(cfg, tmp_path, capsys):
     assert cli.main(["--config", config, "eval", "--symbols", "AAPL", "--as-of", "2026-10-09",
                      "--out", str(tmp_path / "eval")]) == 0
     assert '"avg_rounds_to_conclusion": 3' in capsys.readouterr().out
+    assert cli.main(["--config", config, "eval", "--replay-last", "5"]) == 0
+    replayed = capsys.readouterr().out
+    assert "Concluded: 2" in replayed and "| pass_by_majority | 2 |" in replayed
     assert cli.main(["--config", config, "ask-team", "assessment", "NVDA", "--as-of",
                      "2026-10-09", "--question", "valuation?"]) == 0
     assert "tool calculate(" in capsys.readouterr().out
@@ -157,3 +160,59 @@ async def test_ui_shows_a_saved_debate_with_reports(cfg, conn):
     assert detail["rounds"][0]["reports"][0]["team"] == "risk"
     assert [r["result"] for r in detail["rounds"]] == ["request_info", "continue", "invest"]
     assert detail["research"]["observations"]
+
+
+# ------------------------------------------------------------------ what-if replay
+
+HOLDOUT_PLAN = {"aggressive": [{"action": "invest", "size_usd": 9000}],
+                "conservative": [{"action": "pass"}],
+                "neutral": [{"action": "request_info", "target": "risk", "request": "liquidity?"},
+                            {"action": "pass", "changed_because": "the report"}]}
+
+
+async def test_replay_predicts_what_the_engine_does_under_other_rules(cfg, conn, monkeypatch):
+    from dataclasses import replace
+
+    from qfii.committee.replay import from_records, replay_debate
+
+    scripted_committee(monkeypatch, HOLDOUT_PLAN)
+    base = replace(cfg, committee=replace(cfg.committee, max_rounds=12))
+    run = await run_paper(base, conn, "NVDA", AS_OF, save=True)
+    assert run.outcome == "no_consensus" and len(run.debate.rounds) == 12
+    rounds, kinds = from_records(run.debate.rounds)
+    for change in ({"pass_rule": "majority"}, {"stop_after_unchanged_rounds": 3},
+                   {"stop_after_unchanged_rounds": 2, "pass_rule": "unanimous"}):
+        rules = replace(base.committee, **change)
+        predicted = replay_debate(rounds, kinds, rules)
+        real = await run_paper(replace(base, committee=rules), conn, "NVDA", AS_OF, save=True)
+        assert predicted.exact
+        assert (predicted.outcome, predicted.rounds) == \
+            ("no_consensus" if real.outcome == "no_consensus" else real.outcome,
+             len(real.debate.rounds)), change
+
+
+async def test_eval_reports_what_if_and_replays_from_the_database(cfg, conn, monkeypatch,
+                                                                tmp_path):
+    from dataclasses import replace
+
+    from qfii.evaluate import replay_saved
+
+    scripted_committee(monkeypatch, HOLDOUT_PLAN)
+    base = replace(cfg, committee=replace(cfg.committee, max_rounds=8))
+    result = await evaluate(base, ["NVDA"], AS_OF, tmp_path)
+    row = result["papers"][0]
+    assert row["outcome"] == "no_consensus" and row["final_votes"] == {"invest": 1, "pass": 2}
+    assert row["what_if"]["pass_by_majority"] == {"outcome": "pass", "rounds": 2, "exact": True,
+                                                  "size_usd": None, "amendment_id": None}
+    w = result["summary"]["what_if"]
+    assert w["pass_by_majority"]["rounds_saved"] == 6
+    assert w["stop_after_3_unchanged"]["avg_rounds_all_debated"] == 5
+    report = (Path(result["dir"]) / "report.md").read_text()
+    assert "## What if" in report and "NVDA: {'invest': 1, 'pass': 2}" in report
+
+    # the same numbers straight from the saved ballots
+    pid = conn.execute("SELECT MAX(paper_id) FROM debates").fetchone()[0]
+    saved = replay_saved(conn, base.committee, [pid])
+    assert saved["papers"][0]["what_if"] == row["what_if"]
+    assert saved["papers"][0]["rounds_total"] == 8
+    assert saved["summary"]["what_if"] == w

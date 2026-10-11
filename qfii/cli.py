@@ -42,7 +42,7 @@ def _cmd_config(cfg: Config, args: argparse.Namespace) -> int:
           f"orders/day={lim.daily_order_cap}")
     c = cfg.committee
     print(f"committee:  {', '.join(COMMITTEE)} (equal votes); trade={c.invest_rule}, "
-          f"info/send-back={c.procedural_rule}, size within {c.size_tolerance_pct}%, "
+          f"pass={c.pass_rule}, info/send-back={c.procedural_rule}, size within {c.size_tolerance_pct}%, "
           f"max {c.max_rounds} rounds then shelve")
     pf = cfg.portfolio
     print(f"portfolio:  benchmark={pf.benchmark} costs={pf.commission_bps}+{pf.slippage_bps}bps "
@@ -199,7 +199,22 @@ def _cmd_ask_team(cfg: Config, args: argparse.Namespace) -> int:
 def _cmd_eval(cfg: Config, args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from .evaluate import evaluate
+    from .evaluate import evaluate, markdown_report, replay_saved
+
+    if args.replay_last:
+        # measure papers already debated (e.g. an earlier eval) and their what-ifs,
+        # from the saved ballots only: no LLM calls
+        conn = connect(cfg.db_path)
+        ids = [r[0] for r in conn.execute(
+            "SELECT DISTINCT paper_id FROM debates ORDER BY paper_id DESC LIMIT ?",
+            (args.replay_last,))][::-1]
+        if args.symbols:
+            wanted = {s.upper() for s in args.symbols}
+            ids = [i for i in ids if conn.execute("SELECT symbol FROM papers WHERE id = ?",
+                                                  (i,)).fetchone()[0] in wanted]
+        result = replay_saved(conn, cfg.committee, ids)
+        print(markdown_report(result["papers"], result["summary"]))
+        return 0
 
     symbols = [s.upper() for s in args.symbols] or list(cfg.symbols)
 
@@ -481,6 +496,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--symbols", nargs="*", default=[], help="default: the universe")
     p.add_argument("--as-of", type=date.fromisoformat)
     p.add_argument("--out", default="data/eval")
+    p.add_argument("--replay-last", type=int, metavar="N",
+                   help="no new debates: re-measure the last N debated papers from the "
+                        "database, with what-if rule variants")
 
     p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
     p.add_argument("symbol")

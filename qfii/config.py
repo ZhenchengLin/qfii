@@ -64,6 +64,7 @@ class Limits:
 class Committee:
     max_rounds: int
     invest_rule: str
+    pass_rule: str
     procedural_rule: str
     info_request_rule: str
     stop_after_unchanged_rounds: int
@@ -156,7 +157,7 @@ def _number(raw: dict[str, Any], key: str, where: str, *, lo: float, hi: float |
 
 
 def _committee(raw: dict[str, Any]) -> Committee:
-    for key in ("invest_rule", "procedural_rule"):
+    for key in ("invest_rule", "pass_rule", "procedural_rule"):
         if raw[key] not in CONSENSUS_RULES:
             raise ConfigError(f"committee.{key} must be one of {CONSENSUS_RULES}")
     if raw["info_request_rule"] not in INFO_REQUEST_RULES:
@@ -167,6 +168,7 @@ def _committee(raw: dict[str, Any]) -> Committee:
                                                 lo=0, hi=50, integer=True)),
         max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=50, integer=True)),
         invest_rule=raw["invest_rule"],
+        pass_rule=raw["pass_rule"],
         procedural_rule=raw["procedural_rule"],
         size_tolerance_pct=float(_number(raw, "size_tolerance_pct", "committee", lo=0, hi=100)),
         max_send_backs=int(_number(raw, "max_send_backs", "committee", lo=0, hi=5, integer=True)),

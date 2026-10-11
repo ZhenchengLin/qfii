@@ -143,9 +143,12 @@ stale_after_days = 5
 
 # Committee protocol. Each round every member writes an argument and casts one
 # equal-weight ballot: invest / replace / pass / request_info / send_back.
-#   invest_rule      votes needed to trade (invest, replace, pass): "unanimous"
-#                    or "majority" (2 of 3). Sizes must also agree: all proposed
+#   invest_rule      votes needed to trade (invest, replace): "unanimous" or
+#                    "majority" (2 of 3). Sizes must also agree: all proposed
 #                    sizes within size_tolerance_pct of each other; the median wins.
+#   pass_rule        votes needed to decide not to invest. With "unanimous" one
+#                    member who wants to invest keeps the debate going until
+#                    max_rounds; "majority" lets 2 of 3 close the paper as a pass.
 #   procedural_rule  votes needed to send the paper back to a team.
 #   info_request_rule  votes needed to get a team report: "any" (one member's
 #                    question is answered and the report is shown to everyone),
@@ -156,6 +159,7 @@ stale_after_days = 5
 [committee]
 max_rounds = 20
 invest_rule = "unanimous"
+pass_rule = "unanimous"
 procedural_rule = "majority"
 info_request_rule = "any"
 # End the debate early (no consensus) once every member has repeated the same
