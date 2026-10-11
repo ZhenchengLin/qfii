@@ -4,7 +4,10 @@
   GET  /api/status              models, portfolio, investor, pipeline counts
   GET  /api/debates             past debates
   GET  /api/debates/{id}        one debate: research, rounds, ballots, reports, outcome
-  POST /api/runs                {"symbol": "NVDA", "as_of": "2026-10-09"} starts a debate
+  GET  /api/week                the week replay: run status, the stocks, latest events
+  POST /api/week/start          {"resume": true|false} starts `qfii week run` in the background
+  POST /api/week/stop           stops the replay after the current slot
+  POST /api/runs                (development only; the page no longer offers ticker input)
   GET  /api/runs/{id}/events    Server-Sent Events: research, ballot, round, outcome, error
 
 One debate runs at a time (they share the models). Events are kept per run, so a
@@ -19,6 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
@@ -54,8 +58,9 @@ def _ballot_json(b: Any) -> dict[str, Any]:
 
 
 class DebateServer:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, config_path: str | None = None):
         self.cfg = cfg
+        self.config_path = config_path
         self.conn = connect(cfg.db_path)
         init_db(self.conn, cfg.limits.starting_cash_usd)
         self.runs: dict[str, Run] = {}
@@ -77,7 +82,8 @@ class DebateServer:
             "committee": {"max_rounds": cfg.committee.max_rounds,
                           "trade_rule": cfg.committee.invest_rule,
                           "pass_rule": cfg.committee.pass_rule,
-                          "procedural_rule": cfg.committee.procedural_rule},
+                          "procedural_rule": cfg.committee.procedural_rule,
+                          "neutral_is_assessment": cfg.committee.neutral_is_assessment},
             "active_run": self.active.id if self.active and not self.active.done else None,
         }
 
@@ -161,6 +167,99 @@ class DebateServer:
             "rounds": [rounds[k] for k in sorted(rounds)],
         }
 
+    # ------------------------------------------------------------ week replay
+    def _week_files(self) -> tuple[Path, Path, Path]:
+        db = self.cfg.db_path
+        return Path(f"{db}.week.pid"), Path(f"{db}.week.stop"), Path(f"{db}.week.log")
+
+    def week_running(self) -> bool:
+        import os
+
+        pid_file = self._week_files()[0]
+        try:
+            os.kill(int(pid_file.read_text()), 0)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def week(self, symbol: str | None = None, limit: int = 200) -> dict[str, Any]:
+        manifest_path = self.cfg.week.dataset_dir / "manifest.json"
+        if not manifest_path.exists():
+            return {"available": False,
+                    "reason": f"no dataset at {self.cfg.week.dataset_dir} (qfii week build)"}
+        manifest = json.loads(manifest_path.read_text())
+        row = self.conn.execute(
+            "SELECT id, status, last_slot, note, started_at, window_json FROM week_runs "
+            "ORDER BY id DESC LIMIT 1").fetchone()
+        run = None
+        events: list[dict[str, Any]] = []
+        stocks = {s: {"symbol": s, "name": manifest.get("names", {}).get(s, s)}
+                  for s in manifest["symbols"]}
+        if row:
+            run_id, status, last_slot, note, started, window = row
+            done = self.conn.execute("SELECT COUNT(*) FROM week_events WHERE run_id = ? AND "
+                                     "kind = 'slot'", (run_id,)).fetchone()[0]
+            running = self.week_running()
+            run = {"id": run_id, "status": "running" if running else
+                   ("interrupted" if status == "running" else status),
+                   "last_slot": last_slot, "note": note, "started_at": started,
+                   "slots_done": done, "slots_total": json.loads(window).get("slots")}
+            for kind, sym, detail, paper_id, debate_id in self.conn.execute(
+                    "SELECT kind, symbol, detail_json, paper_id, debate_id FROM week_events "
+                    "WHERE run_id = ? AND kind IN ('slot', 'research', 'screen', 'debate') "
+                    "ORDER BY id", (run_id,)):
+                d = json.loads(detail)
+                if kind == "slot":
+                    for s, price in (d.get("prices") or {}).items():
+                        if s in stocks:
+                            stocks[s]["price"] = price
+                elif kind == "research" and sym in stocks:
+                    stocks[sym].update(report_reason=d.get("reason"),
+                                       report_price=d.get("price"))
+                elif kind == "screen":
+                    for item in d.get("items", []):
+                        if item["symbol"] in stocks:
+                            stocks[item["symbol"]].update(decision=item["decision"],
+                                                          decision_reason=item["reason"])
+                elif kind == "debate" and sym in stocks:
+                    stocks[sym]["debate"] = {"id": debate_id, "outcome": d.get("outcome"),
+                                             "size_usd": d.get("size_usd"),
+                                             "rounds": d.get("rounds")}
+            where, args = "run_id = ? AND kind <> 'slot'", [run_id]
+            if symbol:
+                where += " AND (symbol = ? OR kind = 'screen')"
+                args.append(symbol.upper())
+            for eid, slot, kind, sym, detail, paper_id, debate_id in self.conn.execute(
+                    f"SELECT id, slot, kind, symbol, detail_json, paper_id, debate_id FROM "
+                    f"week_events WHERE {where} ORDER BY id DESC LIMIT ?", (*args, limit)):
+                events.append({"id": eid, "slot": slot, "kind": kind, "symbol": sym,
+                               "paper_id": paper_id, "debate_id": debate_id,
+                               **json.loads(detail)})
+        return {"available": True, "symbols": manifest["symbols"],
+                "window": manifest["window"], "stocks": list(stocks.values()), "run": run,
+                "events": events}
+
+    def week_start(self, resume: bool) -> None:
+        import subprocess
+        import sys
+
+        if self.week_running():
+            raise RuntimeError("the week replay is already running")
+        if not (self.cfg.week.dataset_dir / "manifest.json").exists():
+            raise RuntimeError(f"no dataset at {self.cfg.week.dataset_dir}: run "
+                               f"`qfii week build` first")
+        log = self._week_files()[2]
+        cmd = [sys.executable, "-m", "qfii.cli"]
+        if self.config_path:
+            cmd += ["--config", self.config_path]
+        cmd += ["week", "run"] + (["--resume"] if resume else [])
+        with log.open("a") as fh:
+            subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT,
+                             start_new_session=True)
+
+    def week_stop(self) -> None:
+        self._week_files()[1].write_text("stop")
+
     def _decision_terms(self, debate_id: int) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT amendment_id, terms_json FROM decisions "
                                 "WHERE debate_id = ?", (debate_id,)).fetchone()
@@ -242,8 +341,8 @@ class DebateServer:
                 yield ": keep-alive\n\n"
 
 
-def build_app(cfg: Config) -> Starlette:
-    server = DebateServer(cfg)
+def build_app(cfg: Config, config_path: str | None = None) -> Starlette:
+    server = DebateServer(cfg, config_path)
     page = resources.files("qfii.web").joinpath("static/index.html").read_text()
 
     async def index(request: Request) -> Response:
@@ -278,11 +377,32 @@ def build_app(cfg: Config) -> Starlette:
                                  headers={"Cache-Control": "no-cache",
                                           "X-Accel-Buffering": "no"})
 
+    async def week(request: Request) -> Response:
+        return JSONResponse(server.week(request.query_params.get("symbol")))
+
+    async def week_start(request: Request) -> Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            body = {}
+        try:
+            server.week_start(bool(body.get("resume")))
+        except RuntimeError as exc:
+            return JSONResponse({"error": str(exc)}, 409)
+        return JSONResponse({"started": True})
+
+    async def week_stop(request: Request) -> Response:
+        server.week_stop()
+        return JSONResponse({"stopping": True})
+
     app = Starlette(routes=[
         Route("/", index),
         Route("/api/status", status),
         Route("/api/debates", debates),
         Route("/api/debates/{id:int}", debate),
+        Route("/api/week", week),
+        Route("/api/week/start", week_start, methods=["POST"]),
+        Route("/api/week/stop", week_stop, methods=["POST"]),
         Route("/api/runs", start_run, methods=["POST"]),
         Route("/api/runs/{id}/events", events),
     ])

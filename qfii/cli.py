@@ -326,7 +326,8 @@ def _cmd_ui(cfg: Config, args: argparse.Namespace) -> int:
     from .web.app import build_app
 
     print(f"Qfii debate viewer on http://{args.host}:{args.port}/", flush=True)
-    uvicorn.run(build_app(cfg), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(build_app(cfg, args.config), host=args.host, port=args.port,
+                log_level="warning")
     return 0
 
 

@@ -214,3 +214,37 @@ def test_asking_assessment_is_refused_when_it_sits_at_the_table(week_cfg, monkey
     actions = {r[0] for r in conn.execute("SELECT action FROM ballots WHERE debate_id = ?",
                                           (debate_id,))}
     assert actions == {"abstain"}          # invalid twice -> abstain, never a team request
+
+
+def test_website_shows_the_week_and_starts_and_stops_it(week_cfg, monkeypatch):
+    import subprocess
+
+    from qfii.web.app import build_app
+
+    cfg, conn = week_cfg()
+    run(cfg, conn, max_slots=2)
+    server = build_app(cfg, "configs/week.toml").state.server
+    w = server.week()
+    assert w["available"] and w["run"]["slots_done"] == 2 and w["run"]["slots_total"] == 78
+    aaa = next(s for s in w["stocks"] if s["symbol"] == "AAA")
+    assert aaa["decision"] == "advance" and aaa["debate"]["id"] and aaa["price"]
+    assert {e["kind"] for e in w["events"]} >= {"research", "screen", "debate"}
+    only = server.week(symbol="CCC")["events"]
+    assert all(e["symbol"] in ("CCC", None) for e in only)
+
+    started = []
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: started.append(cmd))
+    server.week_start(resume=True)
+    assert started[0][-5:] == ["--config", "configs/week.toml", "week", "run", "--resume"]
+    server.week_stop()
+    assert server._week_files()[1].exists()            # the runner stops after its slot
+
+
+def test_website_without_a_dataset_says_how_to_build_it(cfg, tmp_path):
+    from dataclasses import replace
+
+    from qfii.web.app import build_app
+
+    cfg = replace(cfg, week=replace(cfg.week, dataset_dir=tmp_path / "missing"))
+    w = build_app(cfg).state.server.week()
+    assert w["available"] is False and "qfii week build" in w["reason"]

@@ -339,8 +339,25 @@ class Week:
                    amendment=(last.final.amendment if last and last.final else None))
 
     # -------------------------------------------------- the loop
+    @property
+    def control_files(self) -> tuple[Path, Path]:
+        """(pid file while running, stop file: create it to stop after the slot)."""
+        return Path(f"{self.cfg.db_path}.week.pid"), Path(f"{self.cfg.db_path}.week.stop")
+
     async def run(self, resume: bool = False, until: str | None = None,
                   max_slots: int | None = None) -> dict[str, Any]:
+        import os
+
+        pid_file, stop_file = self.control_files
+        stop_file.unlink(missing_ok=True)
+        pid_file.write_text(str(os.getpid()))
+        try:
+            return await self._run(resume, until, max_slots)
+        finally:
+            pid_file.unlink(missing_ok=True)
+
+    async def _run(self, resume: bool, until: str | None, max_slots: int | None
+                   ) -> dict[str, Any]:
         done_slot = self.start(resume)
         slots = [s for s in self.slots if done_slot is None or s.end > done_slot.end]
         if until:
@@ -379,7 +396,7 @@ class Week:
                                                  f"{self.cfg.week.gb_per_day} GB/day limit")
                 self.event(slot, "storage", written_bytes=written, limit_bytes=limit)
                 return self.summary()
-            if self.stop_requested:
+            if self.stop_requested or self.control_files[1].exists():
                 self.save_state(slot, "stopped", "stopped on request")
                 return self.summary()
             self.save_state(slot)

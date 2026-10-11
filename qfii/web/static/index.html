@@ -116,6 +116,38 @@ details.proposal { background: var(--panel); border: 1px solid var(--line); bord
 .sev.low { color: var(--muted); } .sev.medium { color: var(--warn); }
 .sev.high, .sev.blocking { color: var(--bad); } .sev.blocking { outline: 1px solid var(--bad); }
 .ok { color: var(--good); font-weight: 700; } .no { color: var(--bad); font-weight: 700; }
+.weekbox { display: grid; gap: 8px; margin-bottom: 22px; font-size: 13px; }
+.weekbox .status { color: var(--muted); }
+.weekbox .status b { color: var(--ink); }
+.bar { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--neutral); width: 0; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btns button { flex: 1; padding: 7px 8px; font-size: 13px; }
+.btns button.secondary { background: var(--chip); color: var(--ink); }
+.dec { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .03em; background: var(--chip); color: var(--muted); }
+.dec.advance { background: var(--neutral-soft); color: var(--good); }
+.dec.dig { color: var(--info); } .dec.reject { color: var(--bad); }
+.dec.invest, .dec.replace { background: var(--neutral-soft); color: var(--good); }
+.dec.no_consensus { color: var(--warn); }
+.stock { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 7px 10px;
+  border-radius: 8px; cursor: pointer; font-size: 14px; }
+.stock:hover, .stock.on { background: var(--chip); }
+.stock .px { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; text-align: right; }
+.stock .why { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+.slot { margin-bottom: 16px; }
+.slot h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); font-weight: 600;
+  font-variant-numeric: tabular-nums; }
+.ev { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 12px; margin-bottom: 6px; font-size: 14px; box-shadow: var(--shadow); }
+.ev .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); margin-right: 8px; }
+.ev.debate { border-left: 4px solid var(--neutral); cursor: pointer; }
+.ev.error { border-left: 4px solid var(--bad); }
+.ev details summary { cursor: pointer; }
+.ev ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.screen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.screen .dec { cursor: help; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   aside { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -131,30 +163,26 @@ details.proposal { background: var(--panel); border: 1px solid var(--line); bord
 </header>
 <div class="layout">
   <aside>
-    <h2>New debate</h2>
-    <form id="form">
-      <label for="symbol">Ticker</label>
-      <input id="symbol" placeholder="NVDA" autocomplete="off" required>
-      <label for="asof">Information cutoff (optional)</label>
-      <input id="asof" type="date">
-      <button id="go" type="submit">Start debate</button>
-      <div id="formMsg"></div>
-    </form>
-    <h2>Past debates</h2>
+    <h2>Week replay</h2>
+    <div class="weekbox" id="weekbox"><div class="empty">Loading…</div></div>
+    <h2>Stocks</h2>
+    <div class="list" id="stocks"></div>
+    <h2 style="margin-top:22px">Debates</h2>
     <div class="list" id="history"><div class="empty">None yet.</div></div>
   </aside>
   <main id="main">
     <div class="intro">
-      <h3>Watch three investors argue</h3>
-      <p>Research gathers cited facts about a stock. Then the committee debates in rounds:
-        <b style="color:var(--aggressive)">Aggressive</b> weighs upside,
-        <b style="color:var(--conservative)">Conservative</b> weighs downside, and
-        <b style="color:var(--neutral)">Neutral</b> weighs both against the S&amp;P 500 and the
-        whole portfolio. Each has one equal vote. They can invest, pass, ask a team for more
-        information, or send the proposal back. A trade needs consensus on the action and the
-        size; if they cannot agree within the round limit, the stock is shelved.</p>
-      <p>Start a debate on the left, or open a past one.</p>
+      <h3>A trading week, bottom up</h3>
+      <p>Ten Nasdaq-100 stocks drawn at random are followed through one week of market time,
+        every 10 minutes. <b>Research</b> rewrites a stock's report when something new happens
+        (a filing, a price move, or a question). <b>Assessment</b> reads all ten reports, asks
+        Research to dig deeper where it needs to, and takes the best to the committee, where it
+        sits as the <b style="color:var(--neutral)">Neutral</b> member with
+        <b style="color:var(--aggressive)">Aggressive</b> and
+        <b style="color:var(--conservative)">Conservative</b>.</p>
+      <p>Start the replay on the left. Each step appears below as it happens.</p>
     </div>
+    <div id="timeline"></div>
   </main>
 </div>
 <script>
@@ -282,13 +310,15 @@ function renderProposal(p, version) {
 function renderReport(rep) {
   const r = rep.report || {};
   const div = el("div", "report");
-  div.append(el("b", null, rep.team === "risk" ? "Risk & Validation report" : "Assessment report"));
+  div.append(el("b", null, {risk: "Risk & Validation report", research: "Research report (dug deeper)"}[rep.team]
+                           || "Assessment report"));
   for (const q of rep.requests || []) {
     const m = q.match(/^\[(\w+)\]\s*(.*)$/s);
     div.append(el("p", "asked", m ? `${m[1][0].toUpperCase() + m[1].slice(1)} asked: ${m[2]}` : q));
   }
   if (r.error || r.note) { div.append(el("p", null, r.error || r.note)); return div; }
   const ul = el("ul");
+  for (const o of r.observations || []) ul.append(el("li", null, o.text));
   for (const a of r.answers || []) ul.append(el("li", null, a.claim));
   for (const f of r.findings || []) {
     const li = el("li"); li.append(el("span", "sev " + f.severity, f.severity), f.issue);
@@ -425,7 +455,7 @@ function watch(runId, symbol, asOf) {
         if (!r.querySelector(".action")) r.remove();
       });
       renderOutcome(ev); setPill(ev.type === "error" ? "failed" : "finished", false);
-      $("#go").disabled = false; loadHistory(ev.debate_id); loadStatus();
+      loadHistory(ev.debate_id); loadStatus();
     }
   };
   source.addEventListener("end", () => source.close());
@@ -435,6 +465,10 @@ async function showDebate(id) {
   if (source) { source.close(); source = null; }
   const d = await (await fetch(`api/debates/${id}`)).json();
   header(d.symbol, d.research.as_of, "finished", false);
+  const back = el("button", "secondary", "← Back to the week");
+  back.style.cssText = "margin-bottom:12px;background:var(--chip);color:var(--ink)";
+  back.onclick = () => { $("#main").replaceChildren(); showWeek(); };
+  $("#main").prepend(back);
   renderResearch(d.research);
   if (d.proposal && d.proposal.thesis) renderProposal(d.proposal, 1);
   for (const r of d.rounds) {
@@ -446,23 +480,177 @@ async function showDebate(id) {
   loadHistory(id);
 }
 
-$("#form").onsubmit = async (e) => {
-  e.preventDefault();
-  $("#formMsg").textContent = "";
-  const symbol = $("#symbol").value.trim().toUpperCase();
-  const as_of = $("#asof").value || null;
-  $("#go").disabled = true;
-  const res = await fetch("api/runs", {method: "POST", headers: {"Content-Type": "application/json"},
-                                        body: JSON.stringify({symbol, as_of})});
-  const body = await res.json();
-  if (!res.ok) { $("#formMsg").textContent = body.error; $("#go").disabled = false; return; }
-  watch(body.run_id, body.symbol, body.as_of);
+// ------------------------------------------------------------------ week replay
+let weekFilter = null;
+let weekTimer = null;
+const SLOT_FMT = s => {
+  const d = new Date(s + ":00");
+  return d.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) +
+    " · " + s.slice(11, 16) + " ET";
 };
+const DECISION = {advance: "advance", hold: "hold", dig: "dig deeper", reject: "reject"};
+
+async function weekPost(path, body) {
+  const res = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"},
+                                 body: JSON.stringify(body || {})});
+  const out = await res.json();
+  if (!res.ok) $("#weekMsg").textContent = out.error || "failed";
+  setTimeout(loadWeek, 800);
+}
+
+function renderWeekPanel(w) {
+  const box = $("#weekbox");
+  box.replaceChildren();
+  if (!w.available) { box.append(el("div", "empty", w.reason)); return; }
+  const r = w.run;
+  const status = el("div", "status");
+  if (r) {
+    status.append(el("b", null, r.status), ` · ${r.slots_done} of ${r.slots_total} slots`);
+    if (r.last_slot) status.append(el("div", null, "at " + SLOT_FMT(r.last_slot)));
+    if (r.note) status.append(el("div", null, r.note));
+  } else status.append(`${w.window.market_days.length} market days, not started`);
+  const bar = el("div", "bar"); const fill = el("span");
+  fill.style.width = r ? `${100 * r.slots_done / (r.slots_total || 1)}%` : "0";
+  bar.append(fill);
+  const btns = el("div", "btns");
+  const running = r && r.status === "running";
+  const mk = (label, cls, fn) => { const b = el("button", cls, label); b.onclick = fn; btns.append(b); };
+  if (running) mk("Stop after this slot", "secondary", () => weekPost("api/week/stop"));
+  else {
+    if (r && r.status !== "done") mk("Resume", "", () => weekPost("api/week/start", {resume: true}));
+    mk(r ? "Start over" : "Start the week", r && r.status !== "done" ? "secondary" : "",
+       () => weekPost("api/week/start", {resume: false}));
+  }
+  const msg = el("div"); msg.id = "weekMsg"; msg.style.color = "var(--bad)";
+  box.append(status, bar, btns, msg);
+}
+
+function renderStocks(w) {
+  const box = $("#stocks");
+  box.replaceChildren();
+  for (const s of w.stocks || []) {
+    const row = el("div", "stock" + (weekFilter === s.symbol ? " on" : ""));
+    row.title = s.name;
+    row.append(el("b", null, s.symbol), el("span", "px", s.price ? "$" + Number(s.price).toFixed(2) : ""));
+    const why = el("div", "why");
+    if (s.decision) why.append(el("span", "dec " + s.decision, DECISION[s.decision] || s.decision));
+    if (s.debate) why.append(el("span", "dec " + s.debate.outcome,
+      s.debate.outcome.replace("_", " ") + (s.debate.size_usd ? " " + money(s.debate.size_usd) : "")));
+    row.append(why);
+    row.onclick = () => { weekFilter = weekFilter === s.symbol ? null : s.symbol; showWeek(); };
+    box.append(row);
+  }
+}
+
+function eventRow(e) {
+  const row = el("div", "ev " + (e.kind === "debate" ? "debate" : e.kind === "error" ? "error" : ""));
+  const k = t => el("span", "k", t);
+  switch (e.kind) {
+    case "research": {
+      const d = el("details");
+      const sum = el("summary");
+      sum.append(k("research"), el("b", null, e.symbol), ` report rewritten (${e.reason})` +
+                 (e.price ? ` · $${Number(e.price).toFixed(2)}` : ""));
+      const ul = el("ul"); for (const o of e.observations || []) ul.append(el("li", null, o));
+      d.append(sum, ul); row.append(d); break;
+    }
+    case "screen": {
+      const d = el("details");
+      const sum = el("summary");
+      const adv = e.items.filter(i => i.decision === "advance").map(i => i.symbol);
+      sum.append(k("assessment"), `screened ${e.items.length} reports` +
+                 (adv.length ? ` · advanced ${adv.join(", ")}` : " · none advanced"));
+      const chips = el("div", "screen");
+      for (const i of e.items) {
+        const c = el("span", "dec " + i.decision, `${i.symbol} ${DECISION[i.decision] || i.decision}`);
+        c.title = i.reason + (i.questions && i.questions.length ? "\nAsks Research: " + i.questions.join("; ") : "");
+        chips.append(c);
+      }
+      const ul = el("ul");
+      for (const i of e.items) {
+        if (weekFilter && i.symbol !== weekFilter) continue;
+        const li = el("li"); li.append(el("b", null, i.symbol + ": "), i.reason);
+        if (i.questions && i.questions.length) li.append(el("div", "rebuttal", "Asks Research: " + i.questions.join("; ")));
+        ul.append(li);
+      }
+      if (e.notes) ul.append(el("li", "rebuttal", e.notes));
+      d.append(sum, chips, ul); row.append(d); break;
+    }
+    case "debate_started":
+      row.append(k("committee"), el("b", null, e.symbol), " goes to the committee: " + (e.thesis || ""));
+      break;
+    case "debate": {
+      const what = (e.outcome || "").replace("_", " ").toUpperCase() +
+        (e.size_usd ? " " + money(e.size_usd) : "") + (e.amendment ? " (amended terms)" : "");
+      row.append(k("debate"), el("b", null, e.symbol), ` ${what} after ${e.rounds} round(s) · open the debate`);
+      row.onclick = () => showDebate(e.debate_id);
+      break;
+    }
+    case "debate_skipped":
+      row.append(k("committee"), el("b", null, e.symbol), " not debated again: " + e.reason); break;
+    case "proposal_withdrawn":
+      row.append(k("assessment"), el("b", null, e.symbol), ` proposal came out ${e.verdict}: ${e.thesis || ""}`); break;
+    case "storage":
+      row.append(k("storage"), `stopped: ${Number(e.written_bytes).toLocaleString()} bytes written today`); break;
+    case "error":
+      row.append(k("error"), (e.symbol ? e.symbol + " " : "") + `${e.stage || ""}: ${e.error}`); break;
+    default:
+      row.append(k(e.kind), JSON.stringify(e).slice(0, 200));
+  }
+  return row;
+}
+
+function renderTimeline(w) {
+  const box = $("#timeline");
+  if (!box) return;
+  box.replaceChildren();
+  const intro = $(".intro");
+  if (intro) intro.hidden = !!w.run;
+  if (!w.run) return;
+  const title = el("div", "title");
+  title.append(el("h3", null, weekFilter ? weekFilter : "This week"));
+  if (weekFilter) title.append(el("span", "pill", "click the stock again to see all"));
+  box.append(title);
+  let current = null, group = null;
+  for (const e of w.events) {
+    if (e.slot !== current) {
+      current = e.slot;
+      group = el("section", "slot");
+      group.append(el("h4", null, SLOT_FMT(e.slot)));
+      box.append(group);
+    }
+    group.append(eventRow(e));
+  }
+  if (!w.events.length) box.append(el("div", "empty", "Waiting for the first slot…"));
+}
+
+async function loadWeek() {
+  const w = await (await fetch("api/week" + (weekFilter ? "?symbol=" + weekFilter : ""))).json();
+  renderWeekPanel(w);
+  renderStocks(w);
+  if ($("#timeline")) renderTimeline(w);
+  clearTimeout(weekTimer);
+  weekTimer = setTimeout(() => { loadWeek(); loadHistory(); },
+                         w.run && w.run.status === "running" ? 4000 : 15000);
+  return w;
+}
+
+function showWeek() {
+  if (source) { source.close(); source = null; }
+  if (!$("#timeline")) {
+    const main = $("#main"); main.replaceChildren();
+    const t = el("div"); t.id = "timeline"; main.append(t);
+  }
+  loadWeek();
+}
 
 (async () => {
   const s = await loadStatus();
+  if (s.committee && s.committee.neutral_is_assessment) models.neutral = (models.neutral || "") + " · Assessment";
   await loadHistory();
-  if (s.active_run) { $("#go").disabled = true; watch(s.active_run, "…", ""); }
+  const w = await loadWeek();
+  if (s.active_run) watch(s.active_run, "…", "");
+  else if (w.run) renderTimeline(w);
 })();
 </script>
 </body>
