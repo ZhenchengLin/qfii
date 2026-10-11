@@ -158,6 +158,11 @@ size_tolerance_pct = 10.0
 max_send_backs = 1
 memory_items = 20
 
+# Assessment and Risk & Validation may research on their own (MCP tools incl. a
+# calculator) when the committee asks them something: at most this many turns.
+[teams]
+max_tool_turns = 6
+
 # Portfolio economics every agent but Research sees. Tax rates are NOT set here:
 # they come from the user's income and filing status (`qfii setup`), see tax.py.
 [portfolio]

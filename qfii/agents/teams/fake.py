@@ -14,9 +14,19 @@ def fake_assessment_responder(system: str, user: str) -> str:
     data = json.loads(user)
     facts = data["facts"]
     if "committee_questions" in data:
+        results = data.get("tool_results") or []
+        if "available_tools" in data and not results:  # research first: one calculation
+            close = next((f for f in facts if "last close" in (f.get("label") or "")), facts[0])
+            return json.dumps({"tool_calls": [{"tool": "calculate", "arguments": {
+                "expression": f"{close['value']} * 2", "label": "twice the last close"}}]})
+        done = [r for r in results if r.get("evidence_id")]
         f = facts[0]
-        return json.dumps({"answers": [{"claim": f"{f['label']} was {f['value']}.",
-                                        "evidence_ids": [f["id"]]}]})
+        answers = [{"claim": f"{f['label']} was {f['value']}.", "evidence_ids": [f["id"]]}]
+        if done:
+            answers.append({"claim": f"Calculated {done[0]['result'].get('label')}: "
+                                     f"{done[0]['result'].get('value')}.",
+                            "evidence_ids": [done[0]["evidence_id"]]})
+        return json.dumps({"final": {"answers": answers}})
     up = _by_name(facts, "12-month price return", "3-month price return")[0]
     vol = _by_name(facts, "annualized volatility")[0]
     dd = _by_name(facts, "drawdown")[0]

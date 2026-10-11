@@ -38,6 +38,17 @@ class ToolBox:
     async def list(self) -> list[str]:
         return [t.name for t in (await self._client.list_tools()).tools]
 
+    async def describe(self) -> list[dict[str, Any]]:
+        """Name, description and argument schema of every tool, for an agent's prompt."""
+        out = []
+        for t in (await self._client.list_tools()).tools:
+            schema = getattr(t, "input_schema", None) or getattr(t, "inputSchema", None) or {}
+            props = {k: {kk: vv for kk, vv in v.items() if kk in ("type", "default")}
+                     for k, v in (schema.get("properties") or {}).items()}
+            out.append({"name": t.name, "description": (t.description or "").strip(),
+                        "arguments": props, "required": schema.get("required", [])})
+        return out
+
     async def call(self, name: str, **arguments: Any) -> dict[str, Any]:
         result = await self._client.call_tool(name, arguments)
         text = "".join(getattr(c, "text", "") for c in result.content)

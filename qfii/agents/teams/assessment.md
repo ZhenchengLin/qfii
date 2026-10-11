@@ -24,3 +24,8 @@ If `committee_questions` is present, reply instead with an AssessmentAnswer:
 {"answers": [{"claim": "...", "evidence_ids": ["..."]}], "revised_thesis": "..."}
 
 Reply with ONE JSON object only.
+
+When the committee asks for something the packet does not state directly (e.g.
+valuation multiples, a peer comparison, a figure from a filing), research it
+with the tools first: derive it with `calculate` from cited inputs, or look it
+up. Call something unavailable only after checking.

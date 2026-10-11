@@ -144,13 +144,15 @@ def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_risk_check(cfg: Config, args: argparse.Namespace) -> int:
-    """Ask Risk & Validation directly: research -> proposal -> risk review."""
+def _cmd_ask_team(cfg: Config, args: argparse.Namespace) -> int:
+    """Ask Assessment or Risk & Validation directly; they may research with tools."""
     from .agents.research.agent import ResearchAgent
     from .agents.structured import AgentFailed
     from .agents.teams.agents import AssessmentAgent, RiskAgent
     from .contracts import ResearchRequest
     from .portfolio import snapshot
+
+    team = getattr(args, "team", "risk")
 
     async def run() -> int:
         conn = connect(cfg.db_path)
@@ -159,25 +161,34 @@ def _cmd_risk_check(cfg: Config, args: argparse.Namespace) -> int:
         packet, _ = await ResearchAgent(cfg).run(ResearchRequest(symbol=args.symbol,
                                                                  as_of=as_of))
         portfolio = snapshot(conn, cfg, as_of).model_dump(mode="json")
-        proposal = await AssessmentAgent(cfg).propose(packet, portfolio)
+        assessment = AssessmentAgent(cfg)
+        proposal = await assessment.propose(packet, portfolio)
         print(f"proposal: {proposal.verdict}, {proposal.suggested_position_pct}% | "
               f"{proposal.thesis[:200]}")
-        risk = RiskAgent(cfg)
         try:
-            report = await risk.review(packet, portfolio, proposal, args.question)
+            if team == "assessment":
+                report, _, trace = await assessment.answer(packet, portfolio, proposal,
+                                                           args.question)
+            else:
+                risk = RiskAgent(cfg)
+                report = await risk.review(packet, portfolio, proposal, args.question)
+                trace = risk.trace
         except AgentFailed as exc:
-            print(f"RISK REPORT FAILED: {exc}", file=sys.stderr)
+            print(f"{team.upper()} FAILED: {exc}", file=sys.stderr)
             return 1
-        print(f"risk evidence collected: {len(risk.evidence)} items "
-              f"({sum(e.payload.get('name') == 'filing_passage' for e in risk.evidence)} "
-              f"filing passages)")
-        for a in report.answers:
+        for t in trace:
+            shown = {k: v for k, v in t["arguments"].items() if k != "as_of"}
+            print(f"  tool {t['tool']}({shown}) -> "
+                  f"{t.get('value') if t['ok'] else 'ERROR ' + t.get('error', '')}")
+        for a in getattr(report, "answers", []):
             print(f"  answer{' [data gap]' if a.data_gap else ''}: {a.claim}")
-        for f in report.findings:
+        for f in getattr(report, "findings", []):
             print(f"  [{f.severity}]{' [data gap]' if f.data_gap else ''} {f.issue}")
-        for c in report.assumption_checks:
+        for c in getattr(report, "assumption_checks", []):
             mark = {True: "holds", False: "FAILS", None: "unknown"}[c.holds]
             print(f"  assumption {mark}: {c.assumption[:150]}")
+        if getattr(report, "revised_thesis", None):
+            print(f"  revised thesis: {report.revised_thesis}")
         return 0
 
     return asyncio.run(run())
@@ -428,6 +439,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--as-of", type=date.fromisoformat, help="information cutoff YYYY-MM-DD")
     p.add_argument("--save", action="store_true", help="store packet, debate and memories")
 
+    p = sub.add_parser("ask-team", help="ask Assessment or Risk & Validation directly")
+    p.add_argument("team", choices=["assessment", "risk"])
+    p.add_argument("symbol")
+    p.add_argument("--question", action="append", required=True,
+                   help="the committee-style question (repeatable)")
+    p.add_argument("--as-of", type=date.fromisoformat)
+
     p = sub.add_parser("risk-check", help="ask Risk & Validation directly about a stock")
     p.add_argument("symbol")
     p.add_argument("--question", action="append", required=True,
@@ -491,7 +509,8 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
-                "schemas": _cmd_schemas, "bench": _cmd_bench, "risk-check": _cmd_risk_check,
+                "schemas": _cmd_schemas, "bench": _cmd_bench, "risk-check": _cmd_ask_team,
+                "ask-team": _cmd_ask_team,
                 "ui": _cmd_ui,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:

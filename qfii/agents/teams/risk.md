@@ -14,3 +14,7 @@ Write a RiskReport:
 
 Rules: be independent and specific; use only the facts given; cite ids exactly;
 never invent numbers. Reply with ONE JSON object only.
+
+If the committee's questions need more than the facts provided, research with
+the tools (filings search, SEC fundamentals, prices, macro, `calculate`) before
+answering. Call something unavailable only after checking.

@@ -61,12 +61,17 @@ class Teams:
             if team == "risk":
                 rep = await self.risk.review(self.packet, self.portfolio, self.proposal,
                                              requests)
+                evidence, trace = self.risk.evidence, self.risk.trace
             else:
-                rep = await self.assessment.answer(self.packet, self.portfolio,
-                                                   self.proposal, requests)
+                rep, evidence, trace = await self.assessment.answer(
+                    self.packet, self.portfolio, self.proposal, requests)
         except AgentFailed as exc:
             return {"team": team, "error": str(exc)}
-        return {"team": team, **rep.model_dump(exclude_none=True)}
+        # what the team looked up or calculated, so the committee can see the work
+        looked_up = {e.id: e for e in evidence}
+        return {"team": team, **rep.model_dump(exclude_none=True),
+                "tool_trace": [{**t, "label": looked_up[t["evidence_id"]].payload.get("label")}
+                               if t.get("evidence_id") in looked_up else t for t in trace]}
 
 
 @dataclass

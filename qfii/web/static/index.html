@@ -87,6 +87,8 @@ details summary { cursor: pointer; font-weight: 600; }
 .amend { margin: 0 0 8px; padding: 8px 10px; border: 1px dashed var(--c); border-radius: 8px;
   background: var(--soft); font-size: 13px; }
 .amend p { margin: 4px 0 0; } .amend .cond { color: var(--muted); }
+.trace { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.trace summary { cursor: pointer; } .trace ul { margin: 4px 0 0; }
 .waiting { color: var(--muted); font-size: 14px; margin-top: 10px; }
 .waiting::after { content: "…"; animation: pulse 1.2s infinite; }
 .result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
@@ -297,6 +299,19 @@ function renderReport(rep) {
   }
   div.append(ul);
   if (r.revised_thesis) div.append(el("p", null, "Revised thesis: " + r.revised_thesis));
+  if (r.tool_trace && r.tool_trace.length) {
+    const t = el("details", "trace");
+    t.append(el("summary", null, `Researched with ${r.tool_trace.length} tool call(s)`));
+    const ul = el("ul");
+    for (const c of r.tool_trace) {
+      const args = Object.entries(c.arguments || {}).filter(([k]) => k !== "as_of")
+        .map(([k, v]) => `${k}=${v}`).join(", ");
+      const what = c.label && !c.label.startsWith(c.tool) ? `${c.label}: ` : "";
+      ul.append(el("li", null, `${c.tool}(${args})` + (c.ok ? (c.value != null ? ` → ${what}${c.value}` : " ✓")
+                                                            : ` ✗ ${c.error || ""}`)));
+    }
+    t.append(ul); div.append(t);
+  }
   if (r.liquidity) div.append(el("p", null, "Liquidity: " + r.liquidity));
   if (r.portfolio_impact) div.append(el("p", null, "Portfolio impact: " + r.portfolio_impact));
   return div;

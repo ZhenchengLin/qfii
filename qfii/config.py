@@ -101,6 +101,7 @@ class Config:
     stale_after_days: int
     committee: Committee
     portfolio: Portfolio
+    max_tool_turns: int
     limits: Limits
     execution_mode: str
 
@@ -275,6 +276,8 @@ def _build(raw: dict[str, Any]) -> Config:
             _number(raw["research"], "stale_after_days", "research", lo=0, integer=True)
         ),
         committee=_committee(raw["committee"]),
+        max_tool_turns=int(_number(raw["teams"], "max_tool_turns", "teams", lo=1, hi=20,
+                                   integer=True)),
         portfolio=_portfolio(raw["portfolio"]),
         limits=limits,
         execution_mode=mode,

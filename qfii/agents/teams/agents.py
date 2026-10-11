@@ -12,6 +12,7 @@ from ...portfolio import max_new_order_usd
 from ...tools.client import ToolBox
 from ..evidence import Collected, collect_evidence
 from ..structured import fact_rows, structured_call
+from ..tooluse import research_then_answer
 from .fake import fake_assessment_responder, fake_risk_responder
 
 _PROMPTS = resources.files("qfii.agents.teams")
@@ -72,11 +73,16 @@ class AssessmentAgent:
                                      {e.id for e in packet.evidence}, self.calls, fix)
 
     async def answer(self, packet: EvidencePacket, portfolio: dict[str, Any],
-                     proposal: Proposal, questions: list[str]) -> AssessmentAnswer:
+                     proposal: Proposal, questions: list[str]
+                     ) -> tuple[AssessmentAnswer, list[EvidenceItem], list[dict[str, Any]]]:
+        """Answer the committee, researching with the MCP tools as needed.
+        Returns (answer, evidence it gathered, trace of tool calls)."""
         payload = {**self._base(packet, portfolio), "proposal": proposal.model_dump(),
                    "committee_questions": questions}
-        return await structured_call(self.llm, self.system, payload, AssessmentAnswer,
-                                     {e.id for e in packet.evidence}, self.calls)
+        async with ToolBox(self.cfg) as tools:
+            return await research_then_answer(
+                self.llm, self.system, payload, AssessmentAnswer, tools, packet.as_of,
+                {e.id for e in packet.evidence}, self.calls, self.cfg.max_tool_turns)
 
 
 def impact_facts(got: Collected, proposal: Proposal, portfolio: dict[str, Any],
@@ -116,6 +122,7 @@ class RiskAgent:
         self.system = _PROMPTS.joinpath("risk.md").read_text()
         self.calls: list[dict[str, Any]] = []
         self.evidence: list[EvidenceItem] = []   # fresh evidence it collected
+        self.trace: list[dict[str, Any]] = []     # tools it chose to call
 
     async def review(self, packet: EvidencePacket, portfolio: dict[str, Any],
                      proposal: Proposal, questions: list[str]) -> RiskReport:
@@ -136,5 +143,9 @@ class RiskAgent:
         def fix(data: dict[str, Any]) -> dict[str, Any]:
             return {**data, "symbol": packet.symbol, "as_of": packet.as_of}
 
-        return await structured_call(self.llm, self.system, payload, RiskReport, known,
-                                     self.calls, fix)
+        async with ToolBox(self.cfg) as tools:
+            report, more, self.trace = await research_then_answer(
+                self.llm, self.system, payload, RiskReport, tools, packet.as_of, known,
+                self.calls, self.cfg.max_tool_turns, fix)
+        self.evidence = got.evidence + more
+        return report

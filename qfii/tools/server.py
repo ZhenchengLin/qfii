@@ -117,6 +117,20 @@ def build_tool_server(cfg: Config) -> MCPServer:
         return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR", **out}
 
     @server.tool()
+    def calculate(expression: str, label: str = "") -> dict:
+        """Evaluate arithmetic exactly (+ - * / ** %, parentheses, abs/min/max/round/
+        sqrt/log/exp), e.g. market cap = price x shares, P/E = market cap / net income.
+        Use this instead of computing numbers yourself; cite its result."""
+        from .calc import CalcError
+        from .calc import calculate as calc
+
+        try:
+            value = calc(expression)
+        except CalcError as exc:
+            raise McpToolError(str(exc)) from exc
+        return {"expression": expression, "label": label, "value": round(value, 8)}
+
+    @server.tool()
     def get_sec_fundamentals(symbol: str, as_of: str) -> dict:
         """XBRL financials from the latest 10-K and 10-Q filed on or before as_of:
         revenue, net and operating income, cash flow, balance sheet, growth, margins."""
