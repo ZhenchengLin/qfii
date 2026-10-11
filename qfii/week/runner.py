@@ -165,8 +165,8 @@ class Week:
                     if t.get("paper_id"):
                         self.packets[sym] = load_packet(self.conn, t["paper_id"])
             with self.conn:
-                self.conn.execute("UPDATE week_runs SET status = 'running', updated_at = ? "
-                                  "WHERE id = ?", (utcnow(), self.run_id))
+                self.conn.execute("UPDATE week_runs SET status = 'running', note = NULL, "
+                                  "updated_at = ? WHERE id = ?", (utcnow(), self.run_id))
             return AsOf.parse(row[1]) if row[1] else None
         with self.conn:
             self.run_id = self.conn.execute(

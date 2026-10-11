@@ -491,6 +491,7 @@ const SLOT_FMT = s => {
 const DECISION = {advance: "advance", hold: "hold", dig: "dig deeper", reject: "reject"};
 
 async function weekPost(path, body) {
+  panelKey = null;
   const res = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"},
                                  body: JSON.stringify(body || {})});
   const out = await res.json();
@@ -498,7 +499,12 @@ async function weekPost(path, body) {
   setTimeout(loadWeek, 800);
 }
 
+let panelKey = null;
 function renderWeekPanel(w) {
+  // redraw only when something changed, so a button is never replaced mid-click
+  const key = JSON.stringify([w.available, w.reason, w.run]);
+  if (key === panelKey) return;
+  panelKey = key;
   const box = $("#weekbox");
   box.replaceChildren();
   if (!w.available) { box.append(el("div", "empty", w.reason)); return; }
@@ -525,7 +531,11 @@ function renderWeekPanel(w) {
   box.append(status, bar, btns, msg);
 }
 
+let stocksKey = null;
 function renderStocks(w) {
+  const key = JSON.stringify([w.stocks, weekFilter]);
+  if (key === stocksKey) return;
+  stocksKey = key;
   const box = $("#stocks");
   box.replaceChildren();
   for (const s of w.stocks || []) {
