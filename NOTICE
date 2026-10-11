@@ -1,0 +1,8 @@
+Qfii
+Copyright 2026 Zhencheng Lin and Ben Cheung
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository contains no market data. Data the tools download (Yahoo
+Finance prices, SEC EDGAR filings, FRED macro series, the Nasdaq-100 list) is
+subject to the terms of its sources and is not covered by this license.

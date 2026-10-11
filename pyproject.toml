@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,9 @@ name = "qfii"
 version = "0.1.0"
 description = "Qfii: multi-agent research-to-allocation system on A2A + MCP + LangGraph (paper trading)"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Zhencheng Lin"}, {name = "Ben Cheung"}]
 dependencies = [
     "a2a-sdk[http-server]>=1.2,<2",
     "mcp>=2.3,<3",

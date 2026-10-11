@@ -225,3 +225,9 @@ qfii/
   store.py, db.py, schema.sql, config.py, default_config.toml, cli.py
 docs/PLAN.md              milestones and open questions for Ben
 ```
+
+## License
+
+Apache License 2.0. Copyright 2026 Zhencheng Lin and Ben Cheung; see
+[LICENSE](LICENSE) and [NOTICE](NOTICE). Market data the tools download is
+not part of this repository and stays under its sources' terms.
