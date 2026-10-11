@@ -190,7 +190,11 @@ async def test_run_paper_saves_everything(cfg):
     assert len(q("SELECT * FROM info_requests")) == 1
     assert tuple(q("SELECT decision, size_usd FROM decisions")[0]) == ("invest", 6000)
     members = {r[0] for r in q("SELECT DISTINCT agent FROM llm_calls")}
-    assert members == {"research", *COMMITTEE}
+    assert members == {"research", "assessment", "risk", *COMMITTEE}
+    proposal = json.loads(q("SELECT body_json FROM proposals")[0][0])
+    assert proposal["verdict"] == "submit" and proposal["arguments"][0]["evidence_ids"]
+    report = json.loads(q("SELECT report_json FROM info_requests")[0][0])
+    assert report["team"] == "risk" and report["findings"][0]["severity"] == "medium"
     assert tuple(q("SELECT agent, tier FROM llm_calls WHERE agent='neutral'")[0]) \
         == ("neutral", "strongest")
     # each member got its own reflection plus its own lesson

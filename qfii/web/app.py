@@ -91,12 +91,13 @@ class DebateServer:
     def debate(self, debate_id: int) -> dict[str, Any] | None:
         row = self.conn.execute(
             "SELECT d.id, d.paper_id, p.symbol, d.outcome, d.rounds_used, d.started_at, "
-            "x.size_usd FROM debates d JOIN papers p ON p.id = d.paper_id "
-            "LEFT JOIN decisions x ON x.debate_id = d.id WHERE d.id = ?", (debate_id,)
+            "x.size_usd, pr.body_json FROM debates d JOIN papers p ON p.id = d.paper_id "
+            "LEFT JOIN decisions x ON x.debate_id = d.id "
+            "LEFT JOIN proposals pr ON pr.id = d.proposal_id WHERE d.id = ?", (debate_id,)
         ).fetchone()
         if row is None:
             return None
-        did, paper_id, symbol, outcome, rounds_used, started, size = row
+        did, paper_id, symbol, outcome, rounds_used, started, size, proposal_json = row
         packet = self.conn.execute("SELECT body_json FROM packets WHERE paper_id = ? "
                                    "ORDER BY id DESC LIMIT 1", (paper_id,)).fetchone()
         body = json.loads(packet[0]) if packet else {}
@@ -127,6 +128,7 @@ class DebateServer:
         return {
             "id": did, "symbol": symbol, "outcome": outcome, "rounds_used": rounds_used,
             "started_at": started, "size_usd": size,
+            "proposal": json.loads(proposal_json) if proposal_json else None,
             "research": {"as_of": body.get("as_of"),
                          "observations": body.get("observations", []),
                          "flags": body.get("quality_flags", [])},
@@ -166,13 +168,18 @@ class DebateServer:
                       "reports": [{"team": r["team"], "requests": r["requests"],
                                    "report": r["report"]} for r in rec.reports]})
 
+        def on_proposal(proposal, version: int) -> None:
+            run.emit({"type": "proposal", "version": version, "proposal": proposal.model_dump()})
+
         try:
             result = await run_paper(self.cfg, self.conn, run.symbol, as_of, save=True,
                                      on_research=on_research, on_round=on_round,
-                                     on_ballot=on_ballot)
-            run.emit({"type": "outcome", "outcome": result.debate.outcome,
-                      "size_usd": result.debate.size_usd,
-                      "rounds": len(result.debate.rounds), "debate_id": result.debate_id})
+                                     on_ballot=on_ballot, on_proposal=on_proposal)
+            last = result.debate
+            run.emit({"type": "outcome", "outcome": result.outcome,
+                      "size_usd": last.size_usd if last else None,
+                      "rounds": sum(len(d.rounds) for d in result.debates),
+                      "debate_id": result.debate_id})
         except Exception as exc:  # noqa: BLE001 - report any failure to the page
             run.emit({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
         finally:

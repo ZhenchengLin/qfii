@@ -98,8 +98,22 @@ def _print_round(symbol: str, rec) -> None:
         print(f"  {'':<12} {b.argument}")
     print(f"  => {rec.outcome.kind}: {rec.outcome.detail}")
     for rep in rec.reports:
-        print(f"  report from {rep['team']}: {rep['report'].get('note', rep['report'])}")
+        r = rep["report"]
+        print(f"  report from {rep['team']}:")
+        for a in r.get("answers", []):
+            print(f"    answer: {a['claim']}")
+        for f in r.get("findings", []):
+            print(f"    [{f['severity']}] {f['issue']}")
+        if r.get("error") or r.get("note"):
+            print(f"    {r.get('error') or r.get('note')}")
     print(flush=True)
+
+
+def _print_proposal(proposal, version: int) -> None:
+    label = "proposal" if version == 1 else f"revised proposal (v{version})"
+    print(f"\nAssessment {label}: {proposal.verdict}, suggests "
+          f"{proposal.suggested_position_pct}% for ~{proposal.expected_holding_period_days} days")
+    print(f"  thesis: {proposal.thesis}", flush=True)
 
 
 def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
@@ -113,10 +127,12 @@ def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
               f"observations, flags: {', '.join(packet.quality_flags)}", flush=True)
 
     run = asyncio.run(run_paper(cfg, conn, args.symbol, args.as_of, save=args.save,
-                                on_research=on_research, on_round=_print_round))
-    size = f" ${run.debate.size_usd:,.0f}" if run.debate.size_usd else ""
-    print(f"\nOUTCOME: {run.debate.outcome}{size} after {len(run.debate.rounds)} round(s)"
-          + (f"  (paper #{run.paper_id}, debate #{run.debate_id})" if run.paper_id else ""))
+                                on_research=on_research, on_round=_print_round,
+                                on_proposal=_print_proposal))
+    size = f" ${run.debate.size_usd:,.0f}" if run.debate and run.debate.size_usd else ""
+    rounds = sum(len(d.rounds) for d in run.debates)
+    print(f"\nOUTCOME: {run.outcome}{size} after {len(run.debates)} debate(s), {rounds} round(s)"
+          + (f"  (paper #{run.paper_id})" if run.paper_id else ""))
     return 0
 
 

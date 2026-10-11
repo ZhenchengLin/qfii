@@ -60,17 +60,25 @@ def save_packet(conn: sqlite3.Connection, request: ResearchRequest, packet: Evid
     return paper_id
 
 
+# paper state for each Assessment verdict
+VERDICT_STATE = {"submit": "proposal", "reject": "rejected", "defer": "deferred",
+                 "needs_evidence": "needs_evidence"}
+
+
 def save_proposal(conn: sqlite3.Connection, paper_id: int, proposal: dict[str, Any],
-                  actor: str = "assessment") -> int:
-    """Store an Assessment proposal: packet_ready / sent_back -> proposal."""
+                  actor: str = "assessment", verdict: str = "submit") -> int:
+    """Store an Assessment proposal and move the paper by its verdict
+    (packet_ready -> proposal / rejected / deferred / needs_evidence;
+    a revision after a send-back: sent_back -> proposal)."""
     with conn:
         version = conn.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM proposals "
                                "WHERE paper_id = ?", (paper_id,)).fetchone()[0]
         proposal_id = conn.execute(
             "INSERT INTO proposals (paper_id, version, verdict, body_json, created_at) "
-            "VALUES (?, ?, 'submit', ?, ?)", (paper_id, version, json.dumps(proposal), utcnow()),
+            "VALUES (?, ?, ?, ?, ?)",
+            (paper_id, version, verdict, json.dumps(proposal), utcnow()),
         ).lastrowid
-        transition(conn, paper_id, "proposal", actor, f"v{version}")
+        transition(conn, paper_id, VERDICT_STATE[verdict], actor, f"v{version} {verdict}")
     return proposal_id
 
 

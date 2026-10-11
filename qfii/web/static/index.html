@@ -98,6 +98,17 @@ details summary { cursor: pointer; font-weight: 600; }
 .outcome.error { border-color: var(--bad); color: var(--bad); }
 .outcome small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 4px; }
 .intro { max-width: 640px; color: var(--muted); }
+details.proposal { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--info);
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+.proposal .thesis { margin: 10px 0; font-size: 15px; }
+.proposal h5 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.proposal ul, .report ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.proposal .rebuttal { color: var(--muted); }
+.sev { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+  margin-right: 6px; text-transform: uppercase; background: var(--chip); }
+.sev.low { color: var(--muted); } .sev.medium { color: var(--warn); }
+.sev.high, .sev.blocking { color: var(--bad); } .sev.blocking { outline: 1px solid var(--bad); }
+.ok { color: var(--good); font-weight: 700; } .no { color: var(--bad); font-weight: 700; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   aside { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -151,6 +162,8 @@ const el = (tag, cls, text) => {
 const money = v => "$" + Number(v).toLocaleString(undefined, {maximumFractionDigits: 0});
 let models = {};
 let source = null;
+let roundCounter = 0;   // rounds shown so far, across debates (send-back starts a new debate)
+let debateNo = 0;
 
 function actionLabel(b) {
   switch (b.action) {
@@ -234,6 +247,53 @@ function renderResearch(r) {
   }
 }
 
+function renderProposal(p, version) {
+  const box = el("details", "proposal"); box.open = version === 1;
+  const head = version === 1 ? "Assessment proposal" : `Revised proposal (v${version})`;
+  box.append(el("summary", null, `${head}: ${p.verdict.toUpperCase().replace("_", " ")} · ` +
+    `${p.suggested_position_pct}% of equity · ~${p.expected_holding_period_days} days`));
+  box.append(el("p", "thesis", p.thesis));
+  const list = (title, items, fmt) => {
+    if (!items || !items.length) return;
+    box.append(el("h5", null, title));
+    const ul = el("ul"); for (const it of items) ul.append(fmt(it)); box.append(ul);
+  };
+  list("Arguments", p.arguments, a => el("li", null, a.claim));
+  list("Counterarguments", p.counterarguments, c => {
+    const li = el("li", null, c.claim);
+    if (c.rebuttal) li.append(el("span", "rebuttal", " Rebuttal: " + c.rebuttal));
+    return li;
+  });
+  if (p.feasibility) { box.append(el("h5", null, "Feasibility")); box.append(el("p", null, p.feasibility)); }
+  list("Would invalidate the thesis", p.invalidation_conditions, t => el("li", null, t));
+  list("Uncertainties", p.uncertainties, t => el("li", null, t));
+  if (version === 1) $("#research").after(box); else $("#rounds").append(box);
+}
+
+function renderReport(rep) {
+  const r = rep.report || {};
+  const div = el("div", "report");
+  div.append(el("b", null, rep.team === "risk" ? "Risk & Validation report" : "Assessment answers"));
+  if (r.error || r.note) { div.append(el("p", null, r.error || r.note)); return div; }
+  const ul = el("ul");
+  for (const a of r.answers || []) ul.append(el("li", null, a.claim));
+  for (const f of r.findings || []) {
+    const li = el("li"); li.append(el("span", "sev " + f.severity, f.severity), f.issue);
+    if (f.detail) li.append(el("span", "rebuttal", " " + f.detail));
+    ul.append(li);
+  }
+  for (const c of r.assumption_checks || []) {
+    const li = el("li"); li.append(el("span", c.holds ? "ok" : "no", c.holds ? "✓ " : "✗ "), c.assumption);
+    if (c.detail) li.append(el("span", "rebuttal", " " + c.detail));
+    ul.append(li);
+  }
+  div.append(ul);
+  if (r.revised_thesis) div.append(el("p", null, "Revised thesis: " + r.revised_thesis));
+  if (r.liquidity) div.append(el("p", null, "Liquidity: " + r.liquidity));
+  if (r.portfolio_impact) div.append(el("p", null, "Portfolio impact: " + r.portfolio_impact));
+  return div;
+}
+
 function roundBox(n) {
   let box = $(`#round-${n}`);
   if (box) return box;
@@ -265,12 +325,7 @@ function renderRoundResult(n, r) {
   const res = el("div", "result");
   res.append(el("b", null, r.result.replace("_", " ")), r.detail || "");
   box.append(res);
-  for (const rep of r.reports || []) {
-    const div = el("div", "report");
-    const note = rep.report && (rep.report.note || rep.report.summary) || JSON.stringify(rep.report);
-    div.append(el("b", null, `Report from ${rep.team}: `), note);
-    box.append(div);
-  }
+  for (const rep of r.reports || []) box.append(renderReport(rep));
 }
 
 function renderOutcome(o) {
@@ -278,7 +333,13 @@ function renderOutcome(o) {
   const text = o.type === "error" ? "Error" :
     { invest: "Decision: INVEST " + money(o.size_usd), replace: "Decision: REPLACE " + money(o.size_usd),
       pass: "Decision: PASS", send_back: "Sent back for revision",
-      no_consensus: "No consensus: shelved" }[o.outcome] || o.outcome;
+      no_consensus: "No consensus: shelved",
+      assessment_reject: "Assessment rejected it: no debate",
+      assessment_defer: "Assessment deferred it: no debate",
+      assessment_needs_evidence: "Assessment needs more evidence: sent to Research",
+      assessment_failed: "Assessment could not write a valid proposal",
+      shelved_after_send_back: "Sent back too many times: shelved",
+      shelved_revision_failed: "Revision failed: shelved" }[o.outcome] || o.outcome;
   const div = el("div", "outcome " + kind, text);
   div.append(el("small", null, o.type === "error" ? o.message
     : `after ${o.rounds || o.rounds_used} round(s)`));
@@ -287,17 +348,28 @@ function renderOutcome(o) {
 
 function watch(runId, symbol, asOf) {
   if (source) source.close();
+  roundCounter = 0; debateNo = 0;
   header(symbol, asOf, "researching", true);
   source = new EventSource(`api/runs/${runId}/events`);
   source.onmessage = (msg) => {
     const ev = JSON.parse(msg.data);
     if (ev.type === "started") { models = {...models, ...ev.models}; }
-    else if (ev.type === "research") { renderResearch(ev); roundBox(1); setPill("round 1: deliberating", true); }
-    else if (ev.type === "ballot") renderBallot(ev.round, ev.ballot);
+    else if (ev.type === "research") { renderResearch(ev); setPill("assessment: writing the proposal", true); }
+    else if (ev.type === "proposal") {
+      renderProposal(ev.proposal, ev.version);
+      if (ev.proposal.verdict === "submit") {
+        debateNo += 1; roundBox(roundCounter + 1);
+        setPill(`round ${roundCounter + 1}: deliberating`, true);
+      }
+    }
+    else if (ev.type === "ballot") renderBallot(roundCounter + ev.round, ev.ballot);
     else if (ev.type === "round") {
-      renderRoundResult(ev.round, ev);
+      renderRoundResult(roundCounter + ev.round, ev);
       if (ev.result === "continue" || ev.result === "request_info") {
-        roundBox(ev.round + 1); setPill(`round ${ev.round + 1}: deliberating`, true);
+        roundBox(roundCounter + ev.round + 1);
+        setPill(`round ${roundCounter + ev.round + 1}: deliberating`, true);
+      } else {
+        roundCounter += ev.round;  // debate over; a revision starts the next one
       }
     }
     else if (ev.type === "outcome" || ev.type === "error") {
@@ -317,6 +389,7 @@ async function showDebate(id) {
   const d = await (await fetch(`api/debates/${id}`)).json();
   header(d.symbol, d.research.as_of, "finished", false);
   renderResearch(d.research);
+  if (d.proposal && d.proposal.thesis) renderProposal(d.proposal, 1);
   for (const r of d.rounds) {
     for (const b of r.ballots) renderBallot(r.round, b);
     renderRoundResult(r.round, {result: r.result || "", detail: r.detail || "", reports: r.reports});

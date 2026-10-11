@@ -280,3 +280,29 @@ MESSAGE_FORMATS: dict[str, type[BaseModel]] = {
     "Ballot": Ballot,
     "PortfolioSnapshot": PortfolioSnapshot,
 }
+
+
+class AssessmentAnswer(BaseModel):
+    """Assessment -> committee, when the committee votes request_info -> assessment."""
+
+    answers: list[Claim] = Field(min_length=1, max_length=10)
+    revised_thesis: str | None = Field(default=None, max_length=1200)
+
+
+def cited_ids(model: BaseModel) -> set[str]:
+    """Every evidence id cited anywhere in a report."""
+    found: set[str] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, BaseModel):
+            for name, field_value in value:
+                if name == "evidence_ids":
+                    found.update(field_value)
+                else:
+                    walk(field_value)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(model)
+    return found

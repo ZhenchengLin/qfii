@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from ...contracts import EvidenceItem, EvidencePacket, ResearchNotes, ResearchRequest
 from ...llm import LLM, LLMError, failed_call, parse_json_object
 from ...tools.client import ToolBox
-from ...tools.indicators import LABELS
+from ..evidence import collect_evidence
 
 MAX_ATTEMPTS = 2
 SYSTEM_PROMPT = resources.files("qfii.agents.research").joinpath("prompt.md").read_text()
@@ -52,82 +52,11 @@ def _now() -> str:
 def build_research_graph(tools: ToolBox, llm: LLM):
     async def gather(state: ResearchState) -> dict:
         req = state["request"]
-        sym = req.symbol
         as_of = (req.as_of or date.today()).isoformat()
-        quality = await tools.call("check_data_quality", symbol=sym, as_of=as_of)
-        ind = await tools.call("compute_indicators", symbol=sym, as_of=as_of)
-        hist = await tools.call("get_price_history", symbol=sym, as_of=as_of)
-        bench = await tools.call("compare_to_benchmark", symbol=sym, as_of=as_of)
-        macro = await tools.call("get_macro_snapshot", as_of=as_of)
-        fund = await tools.call("get_fundamentals", symbol=sym, as_of=as_of)
-        retrieved = _now()
-
-        evidence: list[EvidenceItem] = []
-        facts: list[dict[str, Any]] = []
-        gaps: list[str] = []
-        flags = list(quality["flags"])
-
-        def add(kind, source, specialty, name, value, payload, params=None, symbol=sym,
-                **extra):
-            ev = EvidenceItem.make(symbol=symbol, kind=kind, source=source, as_of=as_of,
-                                   retrieved_at=retrieved, payload=payload, params=params)
-            evidence.append(ev)
-            label = LABELS.get(name) or extra.pop("label", None) or name.replace("_", " ")
-            facts.append({"evidence_id": ev.id, "specialty": specialty, "name": name,
-                          "label": label, "value": value, **extra})
-
-        # technical: price, indicators, benchmark
-        if hist["n"]:
-            bars = hist["bars"]
-            add("price", f"mcp:get_price_history/{hist['source']}", "technical", "last_close",
-                bars[-1]["close"],
-                {"n": hist["n"], "first_date": bars[0]["date"], "last_date": bars[-1]["date"],
-                 "last_close": bars[-1]["close"], "bars": bars},
-                {"last_n": len(bars)}, date=bars[-1]["date"])
-        for name, item in ind["indicators"].items():
-            if item["value"] is None:
-                gaps.append(f"{name} unavailable: not enough history")
-                continue
-            add("calc", f"mcp:compute_indicators/{ind['source']}", "technical", name,
-                item["value"], {"name": name, "value": item["value"]},
-                {"window_days": item["window"], "last_date": ind["last_date"]},
-                window_days=item["window"])
-        stats = {k: v for k, v in bench["stats"].items() if v is not None}
-        for name, value in stats.items():
-            add("calc", f"mcp:compare_to_benchmark/{bench['source']}", "technical", name, value,
-                {"name": name, "value": value, "benchmark": bench["benchmark"]},
-                benchmark=bench["benchmark"])
-        if not stats:
-            flags.append("no_benchmark")
-            gaps.append(f"no overlapping history with benchmark {bench['benchmark']}")
-
-        # fundamental: SEC filings public by as_of
-        if fund.get("available"):
-            for name, m in fund["metrics"].items():
-                add("filing", f"mcp:get_fundamentals/SEC EDGAR {m['form']}", "fundamental",
-                    name, m["value"], {"name": name, **m}, period_end=m["period_end"],
-                    filed=m["filed"], prior_year_value=m.get("prior_year_value"))
-            for name, value in fund["derived"].items():
-                add("calc", "mcp:get_fundamentals/derived", "fundamental", name, value,
-                    {"name": name, "value": value})
-        else:
-            flags.append("no_fundamentals")
-            gaps.append(f"fundamentals unavailable: {fund.get('reason', 'no data')}")
-
-        # macro: FRED series public by as_of
-        available = {k: v for k, v in macro["series"].items() if v.get("available")}
-        for sid, m in available.items():
-            add("macro", "mcp:get_macro_snapshot/FRED", "macro_news", sid, m["value"],
-                {"series": sid, **m}, symbol=None, label=m["label"],
-                observation_date=m["observation_date"], value_3m_earlier=m["value_3m_earlier"],
-                value_12m_earlier=m["value_12m_earlier"])
-        if not available:
-            flags.append("no_macro")
-            gaps.append("macro data unavailable (run `qfii data fetch --macro`)")
-        flags.append("no_news")
-        gaps.append("news tools not connected")
-        return {"as_of": as_of, "evidence": evidence, "facts": facts, "flags": flags,
-                "gaps": gaps, "attempts": 0, "llm_calls": [], "feedback": None}
+        got = await collect_evidence(tools, req.symbol, as_of)
+        return {"as_of": as_of, "evidence": got.evidence, "facts": got.facts,
+                "flags": got.flags, "gaps": got.gaps, "attempts": 0, "llm_calls": [],
+                "feedback": None}
 
     async def write_notes(state: ResearchState) -> dict:
         req = state["request"]

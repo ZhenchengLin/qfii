@@ -99,8 +99,8 @@ For the demo, the GPU setup is needed: ~30 min per stock is too slow to show liv
 | M2 | Paper state machine: legal transitions only, event log, DB-level state check | done |
 | M3 | Real data: `qfii data fetch` (Yahoo prices incl. SPY, FRED macro, SEC fundamentals); MCP tools for benchmark, macro (publication-lag aware), fundamentals (filed-by-as_of only) | done |
 | M4 | Continuous discovery: requests first, oldest-first universe scan, dedup, cheap screen (data quality, liquidity), queue cap, daily $ budget; `qfii discover/request/status` | done |
-| M5 | Assessment agent (draft Proposal format in FORMATS.md) | next, pending Ben's OK on the format |
-| M6 | Risk & Validation agent: on-demand, same MCP tools as Research | next, pending Ben's OK on the format |
+| M5 | Assessment agent: proposal from the packet (draft format), answers committee questions, revises after a send-back | done (format still draft) |
+| M6 | Risk & Validation agent: on demand, re-collects evidence with the Research tools, adds code-computed portfolio impact | done (format still draft) |
 | M7 | Committee with real models; send-back loop with `max_send_backs`; members as A2A servers | after M5–M6 |
 | M8 | Execution: sizing from the agreed size, hard limits, paper broker, ledger, reconciliation | after M7 |
 | M9 | Dashboard: paper detail with the full debate transcript and votes per round; portfolio vs SPY | after M8 |
