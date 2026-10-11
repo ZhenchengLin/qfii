@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
 from ...contracts import EvidenceItem, EvidencePacket, ResearchNotes, ResearchRequest
-from ...llm import LLM, LLMError, parse_json_object
+from ...llm import LLM, LLMError, failed_call, parse_json_object
 from ...tools.client import ToolBox
 
 MAX_ATTEMPTS = 2
@@ -105,13 +105,10 @@ def build_research_graph(tools: ToolBox, llm: LLM):
         try:
             result = await llm.complete(SYSTEM_PROMPT, json.dumps(user, indent=1))
         except LLMError as exc:
-            calls.append({"ok": False, "error": str(exc), "provider": llm.provider,
-                          "model": llm.model, "prompt_tokens": 0, "completion_tokens": 0})
+            calls.append(failed_call(llm, str(exc)))
             return {"attempts": attempts, "llm_calls": calls, "notes": None,
                     "feedback": str(exc)}
-        call = {"ok": True, "error": None, "provider": result.provider, "model": result.model,
-                "prompt_tokens": result.prompt_tokens,
-                "completion_tokens": result.completion_tokens}
+        call = result.record()
         try:
             notes = ResearchNotes.model_validate(parse_json_object(result.text))
             known = {e.id for e in state["evidence"]}

@@ -25,6 +25,27 @@ class LLMResult:
     model: str
     prompt_tokens: int
     completion_tokens: int
+    cost_usd: float = 0.0
+
+    def record(self, ok: bool = True, error: str | None = None) -> dict[str, Any]:
+        """The dict agents keep per call; store.record_llm_calls persists it."""
+        return {"ok": ok, "error": error, "provider": self.provider, "model": self.model,
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens, "cost_usd": self.cost_usd}
+
+
+def failed_call(llm: LLM, error: str) -> dict[str, Any]:
+    return {"ok": False, "error": error, "provider": llm.provider, "model": llm.model,
+            "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+
+
+class _Priced:
+    usd_per_m_input = 0.0
+    usd_per_m_output = 0.0
+
+    def _cost(self, prompt_tokens: int, completion_tokens: int) -> float:
+        return round((prompt_tokens * self.usd_per_m_input
+                      + completion_tokens * self.usd_per_m_output) / 1_000_000, 8)
 
 
 class LLM(Protocol):
@@ -42,7 +63,7 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-class FakeLLM:
+class FakeLLM(_Priced):
     """Scripted model: `responder(system, user) -> reply text`."""
 
     provider = "fake"
@@ -55,11 +76,11 @@ class FakeLLM:
     async def complete(self, system: str, user: str) -> LLMResult:
         self.prompts.append((system, user))
         text = self._responder(system, user)
-        return LLMResult(text, self.provider, self.model, _approx_tokens(system + user),
-                         _approx_tokens(text))
+        pt, ct = _approx_tokens(system + user), _approx_tokens(text)
+        return LLMResult(text, self.provider, self.model, pt, ct, self._cost(pt, ct))
 
 
-class OpenAICompatLLM:
+class OpenAICompatLLM(_Priced):
     provider = "openai_compat"
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None,
@@ -96,19 +117,24 @@ class OpenAICompatLLM:
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"unexpected response shape: {str(data)[:300]}") from exc
         usage = data.get("usage") or {}
-        return LLMResult(text, self.provider, self.model,
-                         int(usage.get("prompt_tokens") or _approx_tokens(system + user)),
-                         int(usage.get("completion_tokens") or _approx_tokens(text)))
+        pt = int(usage.get("prompt_tokens") or _approx_tokens(system + user))
+        ct = int(usage.get("completion_tokens") or _approx_tokens(text))
+        return LLMResult(text, self.provider, self.model, pt, ct, self._cost(pt, ct))
 
 
 def make_llm(cfg: Config, agent: str, fake_responder: Callable[[str, str], str]) -> LLM:
     spec = cfg.model_for(agent)
+    llm: FakeLLM | OpenAICompatLLM
     if spec.provider == "fake":
-        return FakeLLM(fake_responder, spec.model)
-    api_key = os.environ.get(spec.api_key_env) if spec.api_key_env else None
-    if spec.api_key_env and not api_key:
-        raise LLMError(f"environment variable {spec.api_key_env} is not set")
-    return OpenAICompatLLM(spec.base_url, spec.model, api_key)
+        llm = FakeLLM(fake_responder, spec.model)
+    else:
+        api_key = os.environ.get(spec.api_key_env) if spec.api_key_env else None
+        if spec.api_key_env and not api_key:
+            raise LLMError(f"environment variable {spec.api_key_env} is not set")
+        llm = OpenAICompatLLM(spec.base_url, spec.model, api_key)
+    llm.usd_per_m_input = spec.usd_per_m_input
+    llm.usd_per_m_output = spec.usd_per_m_output
+    return llm
 
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)

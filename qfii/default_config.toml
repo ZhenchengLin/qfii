@@ -8,23 +8,30 @@ db = "data/qfii.db"
 # provider "openai_compat" calls any OpenAI-compatible /chat/completions
 # endpoint (NVIDIA NIM / Brev, Ollama, vLLM, OpenAI): set base_url, and the
 # NAME of the environment variable holding the key in api_key_env.
+# usd_per_m_input / usd_per_m_output: price per million tokens, for budgets.
 [models.mid]
 provider = "fake"
 model = "fake-mid"
 base_url = ""
 api_key_env = ""
+usd_per_m_input = 0.0
+usd_per_m_output = 0.0
 
 [models.strong]
 provider = "fake"
 model = "fake-strong"
 base_url = ""
 api_key_env = ""
+usd_per_m_input = 0.0
+usd_per_m_output = 0.0
 
 [models.strongest]
 provider = "fake"
 model = "fake-strongest"
 base_url = ""
 api_key_env = ""
+usd_per_m_input = 0.0
+usd_per_m_output = 0.0
 
 # One LLM per team. daily_budget_usd caps spend per agent per day.
 [agents.research]

@@ -31,6 +31,8 @@ class ModelSpec:
     model: str
     base_url: str = ""
     api_key_env: str = ""
+    usd_per_m_input: float = 0.0
+    usd_per_m_output: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -162,8 +164,11 @@ def _build(raw: dict[str, Any]) -> Config:
             raise ConfigError(f"models.{tier}.model is required")
         if spec["provider"] == "openai_compat" and not spec["base_url"]:
             raise ConfigError(f"models.{tier}.base_url is required for openai_compat")
-        models[tier] = ModelSpec(spec["provider"], spec["model"], spec["base_url"],
-                                 spec["api_key_env"])
+        models[tier] = ModelSpec(
+            spec["provider"], spec["model"], spec["base_url"], spec["api_key_env"],
+            float(_number(spec, "usd_per_m_input", f"models.{tier}", lo=0)),
+            float(_number(spec, "usd_per_m_output", f"models.{tier}", lo=0)),
+        )
 
     agents = {}
     for name in AGENTS:

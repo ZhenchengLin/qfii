@@ -5,7 +5,10 @@
 CREATE TABLE papers (
     id          INTEGER PRIMARY KEY,
     symbol      TEXT NOT NULL,
-    state       TEXT NOT NULL DEFAULT 'candidate',
+    state       TEXT NOT NULL DEFAULT 'candidate' CHECK (state IN (
+                    'candidate', 'packet_ready', 'needs_evidence', 'deferred', 'proposal',
+                    'risk_reviewed', 'sent_back', 'decided', 'executed', 'dropped', 'rejected',
+                    'passed', 'shelved', 'exec_rejected', 'closed')),
     origin      TEXT NOT NULL DEFAULT 'discovery' CHECK (origin IN ('discovery', 'request', 'user')),
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL

@@ -16,7 +16,7 @@ from ..agents.research.agent import ResearchAgent
 from ..config import Config
 from ..contracts import EvidencePacket, ResearchRequest
 from ..portfolio import snapshot
-from ..store import save_debate, save_packet
+from ..store import save_debate, save_packet, save_reports
 from .engine import DebateResult, Dossier, run_debate
 from .members import build_members
 from .memory import recall_all
@@ -62,6 +62,9 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
     if save:
         paper_id = save_packet(conn, request, packet, research_calls,
                                cfg.agents["research"].tier)
+        proposal_id, review_id = save_reports(conn, paper_id, proposal, risk,
+                                              actor_suffix=":placeholder")
         debate_id = save_debate(conn, paper_id, packet.symbol, result,
-                                {m.name: (cfg.agents[m.name].tier, m.calls) for m in members})
+                                {m.name: (cfg.agents[m.name].tier, m.calls) for m in members},
+                                proposal_id, review_id)
     return PaperRun(packet, result, paper_id, debate_id)

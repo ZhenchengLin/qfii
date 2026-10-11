@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from ..config import COMMITTEE, Config
 from ..contracts import Ballot
-from ..llm import LLM, LLMError, make_llm, parse_json_object
+from ..llm import LLM, LLMError, failed_call, make_llm, parse_json_object
 from .engine import DebateView
 from .fake import fake_member_responder
 
@@ -37,13 +37,9 @@ class LLMMember:
         try:
             result = await self.llm.complete(self.system, user)
         except LLMError as exc:
-            self.calls.append({"ok": False, "error": str(exc), "provider": self.llm.provider,
-                               "model": self.llm.model, "prompt_tokens": 0,
-                               "completion_tokens": 0})
+            self.calls.append(failed_call(self.llm, str(exc)))
             raise
-        call = {"ok": True, "error": None, "provider": result.provider, "model": result.model,
-                "prompt_tokens": result.prompt_tokens,
-                "completion_tokens": result.completion_tokens}
+        call = result.record()
         self.calls.append(call)
         try:
             data = parse_json_object(result.text)

@@ -8,6 +8,7 @@ from typing import Any
 
 from .contracts import EvidencePacket, ResearchRequest
 from .db import utcnow
+from .papers import create_paper, transition
 
 _ORIGIN = {"discovery": "discovery", "user": "user"}
 
@@ -19,30 +20,27 @@ def record_llm_calls(conn: sqlite3.Connection, agent: str, tier: str,
         cur = conn.execute(
             "INSERT INTO llm_calls (agent, tier, provider, model, paper_id, prompt_tokens, "
             "completion_tokens, cost_usd, ok, error, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (agent, tier, c["provider"], c["model"], paper_id, c["prompt_tokens"],
-             c["completion_tokens"], int(c["ok"]), c["error"], utcnow()),
+             c["completion_tokens"], c.get("cost_usd", 0.0), int(c["ok"]), c["error"],
+             utcnow()),
         )
         ids.append(cur.lastrowid)
     return ids
 
 
 def save_packet(conn: sqlite3.Connection, request: ResearchRequest, packet: EvidencePacket,
-                llm_calls: list[dict[str, Any]], tier: str) -> int:
-    """Create a paper in state packet_ready with its evidence and packet. Returns paper id."""
+                llm_calls: list[dict[str, Any]], tier: str, paper_id: int | None = None) -> int:
+    """Store a research packet and move its paper to packet_ready. Creates the paper
+    unless paper_id is given (a paper in candidate / needs_evidence / deferred)."""
     now = utcnow()
     with conn:
-        paper_id = conn.execute(
-            "INSERT INTO papers (symbol, state, origin, created_at, updated_at) "
-            "VALUES (?, 'packet_ready', ?, ?, ?)",
-            (packet.symbol, _ORIGIN.get(request.requested_by, "request"), now, now),
-        ).lastrowid
-        conn.executemany(
-            "INSERT INTO events (paper_id, from_state, to_state, actor, note, created_at) "
-            "VALUES (?, ?, ?, 'research', ?, ?)",
-            [(paper_id, None, "candidate", request.question, now),
-             (paper_id, "candidate", "packet_ready", None, now)],
-        )
+        if paper_id is None:
+            paper_id = create_paper(conn, packet.symbol,
+                                    _ORIGIN.get(request.requested_by, "request"), "research",
+                                    request.question)
+        transition(conn, paper_id, "packet_ready", "research",
+                   f"{len(packet.observations)} observations")
         for ev in packet.evidence:
             conn.execute(
                 "INSERT OR IGNORE INTO evidence (symbol, kind, source, as_of, retrieved_at, "
@@ -62,13 +60,35 @@ def save_packet(conn: sqlite3.Connection, request: ResearchRequest, packet: Evid
     return paper_id
 
 
+def save_reports(conn: sqlite3.Connection, paper_id: int, proposal: dict[str, Any],
+                 risk_report: dict[str, Any], actor_suffix: str = "") -> tuple[int, int]:
+    """Store the Assessment proposal and Risk report; packet_ready/sent_back -> risk_reviewed."""
+    now = utcnow()
+    with conn:
+        version = conn.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM proposals "
+                               "WHERE paper_id = ?", (paper_id,)).fetchone()[0]
+        proposal_id = conn.execute(
+            "INSERT INTO proposals (paper_id, version, verdict, body_json, created_at) "
+            "VALUES (?, ?, 'submit', ?, ?)", (paper_id, version, json.dumps(proposal), now),
+        ).lastrowid
+        transition(conn, paper_id, "proposal", "assessment" + actor_suffix, f"v{version}")
+        review_id = conn.execute(
+            "INSERT INTO reviews (paper_id, proposal_id, reviewer, outcome, body_json, "
+            "created_at) VALUES (?, ?, 'risk', 'reported', ?, ?)",
+            (paper_id, proposal_id, json.dumps(risk_report), now),
+        ).lastrowid
+        transition(conn, paper_id, "risk_reviewed", "risk" + actor_suffix)
+    return proposal_id, review_id
+
+
 # paper state after a committee debate
 DEBATE_STATE = {"invest": "decided", "replace": "decided", "pass": "passed",
                 "send_back": "sent_back", "no_consensus": "shelved"}
 
 
 def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
-                member_calls: dict[str, tuple[str, list[dict[str, Any]]]] | None = None) -> int:
+                member_calls: dict[str, tuple[str, list[dict[str, Any]]]] | None = None,
+                proposal_id: int | None = None, review_id: int | None = None) -> int:
     """Store a finished committee debate (qfii.committee.engine.DebateResult).
     member_calls maps member -> (model tier, LLM call records)."""
     from .committee.memory import remember
@@ -76,9 +96,9 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
     now = utcnow()
     with conn:
         debate_id = conn.execute(
-            "INSERT INTO debates (paper_id, outcome, rounds_used, started_at, ended_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (paper_id, result.outcome, len(result.rounds), now, now),
+            "INSERT INTO debates (paper_id, proposal_id, risk_report_id, outcome, rounds_used, "
+            "started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (paper_id, proposal_id, review_id, result.outcome, len(result.rounds), now, now),
         ).lastrowid
         for rec in result.rounds:
             for b in rec.ballots:
@@ -103,14 +123,8 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
                 (paper_id, debate_id, result.outcome, result.final.size_usd,
                  result.final.replace_symbol, len(result.rounds), now),
             )
-        old = conn.execute("SELECT state FROM papers WHERE id = ?", (paper_id,)).fetchone()[0]
-        new = DEBATE_STATE[result.outcome]
-        conn.execute("UPDATE papers SET state = ?, updated_at = ? WHERE id = ?",
-                     (new, now, paper_id))
-        conn.execute("INSERT INTO events (paper_id, from_state, to_state, actor, note, created_at) "
-                     "VALUES (?, ?, ?, 'committee', ?, ?)",
-                     (paper_id, old, new, (f"debate #{debate_id}: {result.outcome} after "
-                                          f"{len(result.rounds)} round(s)"), now))
+        transition(conn, paper_id, DEBATE_STATE[result.outcome], "committee",
+                   f"debate #{debate_id}: {result.outcome} after {len(result.rounds)} round(s)")
         # each member remembers its own last stance, plus any note it chose to keep
         last = {b.member: b for rec in result.rounds for b in rec.ballots}
         for member, ballot in last.items():
