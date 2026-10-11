@@ -281,6 +281,14 @@ class ScheduledLLM:
             object.__setattr__(self, name, value)
 
 
+def model_label(spec: ModelSpec) -> str:
+    """Display name of a model, resolving env: values when they are set."""
+    try:
+        return resolve_env(spec.model)
+    except LLMError:
+        return spec.model
+
+
 def resolve_env(value: str) -> str:
     """Config values like "env:LLM_MODEL" are read from the environment, so lab or
     cloud settings never have to be written into a config file."""

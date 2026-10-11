@@ -135,10 +135,11 @@ def _transcript_entry(rec: RoundRecord) -> dict[str, Any]:
 
 async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
                      rules: Committee, memories: dict[str, list[str]] | None = None,
-                     on_round: Callable[[str, RoundRecord], None] | None = None
+                     on_round: Callable[[str, RoundRecord], None] | None = None,
+                     on_ballot: Callable[[str, int, Ballot], None] | None = None
                      ) -> DebateResult:
-    """on_round(symbol, record) is called as each round finishes, so a user can
-    watch the debate live."""
+    """on_ballot(symbol, round, ballot) fires as each member votes and
+    on_round(symbol, record) as each round is tallied, so a user can watch live."""
     names = sorted(m.name for m in members)
     if names != sorted(COMMITTEE):
         raise ValueError(f"committee must be exactly {COMMITTEE}, got {names}")
@@ -151,7 +152,13 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
         views = [DebateView(m.name, r, rules.max_rounds, dossier, list(reports), transcript,
                             list(memories.get(m.name, [])), _rules(rules, dossier.portfolio))
                  for m in members]
-        ballots = list(await asyncio.gather(*(_ballot(m, v) for m, v in zip(members, views))))
+        async def vote(m: MemberAgent, v: DebateView, r: int = r) -> Ballot:
+            ballot = await _ballot(m, v)
+            if on_ballot:
+                on_ballot(dossier.symbol, r, ballot)
+            return ballot
+
+        ballots = list(await asyncio.gather(*(vote(m, v) for m, v in zip(members, views))))
         outcome = tally(ballots, rules)
         rec = RoundRecord(r, ballots, outcome)
         rounds.append(rec)

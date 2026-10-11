@@ -27,6 +27,7 @@ from .committee.runner import PlaceholderTeams, placeholder_proposal
 from .config import COMMITTEE, Config, ModelSpec
 from .contracts import ResearchRequest
 from .db import connect, init_db
+from .llm import model_label
 from .portfolio import snapshot
 
 _OTHERS = re.compile(r"\b(aggressive|conservative|neutral|others?|colleagues?|members?)\b",
@@ -51,7 +52,7 @@ async def bench_debate(cfg: Config, symbol: str, as_of: date, on_round=None) -> 
     attempts = [a for _, e in entries for a in e["attempts"]]
     ballot_secs = [sum(a.get("seconds", 0) for a in e["attempts"]) for _, e in entries]
     late = [b for r in result.rounds[1:] for b in r.ballots if b.action != "abstain"]
-    models = {m: cfg.model_for(m).model for m in COMMITTEE}
+    models = {m: model_label(cfg.model_for(m)) for m in COMMITTEE}
     return {
         "models": models,
         "symbol": symbol, "as_of": as_of.isoformat(),

@@ -49,7 +49,7 @@ class PaperRun:
 
 async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
                     as_of: date | None = None, save: bool = False,
-                    on_research=None, on_round=None) -> PaperRun:
+                    on_research=None, on_round=None, on_ballot=None) -> PaperRun:
     as_of = as_of or date.today()
     request = ResearchRequest(symbol=symbol, as_of=as_of, requested_by="user")
     research = ResearchAgent(cfg)
@@ -61,7 +61,8 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
                       snapshot(conn, cfg, as_of).model_dump(mode="json"))
     members = build_members(cfg)
     result = await run_debate(dossier, members, PlaceholderTeams(), cfg.committee,
-                              recall_all(conn, cfg.committee.memory_items), on_round)
+                              recall_all(conn, cfg.committee.memory_items), on_round,
+                              on_ballot)
     paper_id = debate_id = None
     if save:
         paper_id = save_packet(conn, request, packet, research_calls,

@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qfii Committee</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #667085; --line: #e3e6ec;
+  --chip: #eef0f4;
+  --aggressive: #d9480f; --aggressive-soft: #fff1e8;
+  --conservative: #1864ab; --conservative-soft: #e8f2fc;
+  --neutral: #2b8a3e; --neutral-soft: #ebf7ee;
+  --good: #2b8a3e; --bad: #c92a2a; --warn: #b26b00; --info: #5f3dc4;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218; --panel: #171b23; --ink: #e6e9ef; --muted: #98a2b3; --line: #262c37;
+    --chip: #222833;
+    --aggressive: #ff8a4c; --aggressive-soft: #2b1d14;
+    --conservative: #6cb4ff; --conservative-soft: #142233;
+    --neutral: #63d27a; --neutral-soft: #142a1a;
+    --good: #63d27a; --bad: #ff6b6b; --warn: #ffc14d; --info: #b197fc;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center;
+  padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+header h1 span { color: var(--muted); font-weight: 500; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); }
+.stat { background: var(--chip); border-radius: 999px; padding: 3px 10px; }
+.stat b { color: var(--ink); font-weight: 600; }
+.layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 60px); }
+aside { border-right: 1px solid var(--line); padding: 16px; background: var(--panel); }
+main { padding: 20px 24px 60px; min-width: 0; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  margin: 0 0 10px; }
+form { display: grid; gap: 8px; margin-bottom: 22px; }
+label { font-size: 13px; color: var(--muted); }
+input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit; }
+button { padding: 9px 12px; border: 0; border-radius: 8px; background: var(--ink);
+  color: var(--panel); font: inherit; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .5; cursor: progress; }
+#formMsg { font-size: 13px; color: var(--bad); min-height: 1em; }
+.list { display: grid; gap: 4px; }
+.item { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; font-size: 14px; }
+.item:hover, .item.on { background: var(--chip); }
+.item small { color: var(--muted); }
+.empty { color: var(--muted); font-size: 14px; }
+.title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px; margin-bottom: 14px; }
+.title h3 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.pill { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--chip); }
+.pill.live::before { content: ""; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--bad); margin-right: 6px; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+details.research { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 18px; box-shadow: var(--shadow); }
+details summary { cursor: pointer; font-weight: 600; }
+.obs { columns: 2 320px; column-gap: 24px; margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
+.obs li { break-inside: avoid; margin-bottom: 4px; }
+.obs .tag { font-size: 11px; color: var(--muted); text-transform: uppercase; margin-right: 6px; }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.flag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); color: var(--warn); }
+.round { margin-bottom: 18px; }
+.round h4 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--c);
+  border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); min-height: 120px; }
+.card.aggressive { --c: var(--aggressive); --soft: var(--aggressive-soft); }
+.card.conservative { --c: var(--conservative); --soft: var(--conservative-soft); }
+.card.neutral { --c: var(--neutral); --soft: var(--neutral-soft); }
+.who { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  font-weight: 700; color: var(--c); font-size: 14px; }
+.who small { color: var(--muted); font-weight: 500; font-size: 12px; }
+.action { display: inline-block; margin: 8px 0 6px; padding: 3px 9px; border-radius: 6px;
+  background: var(--soft); color: var(--c); font-weight: 700; font-size: 13px; }
+.request { font-size: 13px; color: var(--info); margin: 0 0 6px; }
+.argument { margin: 0; font-size: 14px; white-space: pre-wrap; }
+.waiting { color: var(--muted); font-size: 14px; margin-top: 10px; }
+.waiting::after { content: "…"; animation: pulse 1.2s infinite; }
+.result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: 13px; color: var(--muted); }
+.result b { color: var(--ink); text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
+.report { margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--info);
+  background: var(--panel); border-radius: 0 8px 8px 0; font-size: 13px; }
+.outcome { margin-top: 10px; padding: 16px 18px; border-radius: 12px; font-size: 18px; font-weight: 700;
+  background: var(--panel); border: 2px solid var(--line); }
+.outcome.invest, .outcome.replace { border-color: var(--good); color: var(--good); }
+.outcome.pass { border-color: var(--muted); }
+.outcome.no_consensus, .outcome.send_back { border-color: var(--warn); color: var(--warn); }
+.outcome.error { border-color: var(--bad); color: var(--bad); }
+.outcome small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 4px; }
+.intro { max-width: 640px; color: var(--muted); }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  .cols { grid-template-columns: 1fr; }
+  main { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Qfii <span>investment committee</span></h1>
+  <div class="stats" id="stats"></div>
+</header>
+<div class="layout">
+  <aside>
+    <h2>New debate</h2>
+    <form id="form">
+      <label for="symbol">Ticker</label>
+      <input id="symbol" placeholder="NVDA" autocomplete="off" required>
+      <label for="asof">Information cutoff (optional)</label>
+      <input id="asof" type="date">
+      <button id="go" type="submit">Start debate</button>
+      <div id="formMsg"></div>
+    </form>
+    <h2>Past debates</h2>
+    <div class="list" id="history"><div class="empty">None yet.</div></div>
+  </aside>
+  <main id="main">
+    <div class="intro">
+      <h3>Watch three investors argue</h3>
+      <p>Research gathers cited facts about a stock. Then the committee debates in rounds:
+        <b style="color:var(--aggressive)">Aggressive</b> weighs upside,
+        <b style="color:var(--conservative)">Conservative</b> weighs downside, and
+        <b style="color:var(--neutral)">Neutral</b> weighs both against the S&amp;P 500 and the
+        whole portfolio. Each has one equal vote. They can invest, pass, ask a team for more
+        information, or send the proposal back. A trade needs consensus on the action and the
+        size; after three rounds without one, the stock is shelved.</p>
+      <p>Start a debate on the left, or open a past one.</p>
+    </div>
+  </main>
+</div>
+<script>
+const MEMBERS = ["aggressive", "conservative", "neutral"];
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;  // never innerHTML for model text
+  return e;
+};
+const money = v => "$" + Number(v).toLocaleString(undefined, {maximumFractionDigits: 0});
+let models = {};
+let source = null;
+
+function actionLabel(b) {
+  switch (b.action) {
+    case "invest": return "INVEST " + money(b.size_usd);
+    case "replace": return `REPLACE ${b.replace_symbol} with ${money(b.size_usd)}`;
+    case "request_info": return "ASK " + (b.target || "").toUpperCase();
+    case "send_back": return "SEND BACK to " + (b.target || "").toUpperCase();
+    default: return b.action.toUpperCase();
+  }
+}
+
+async function loadStatus() {
+  const s = await (await fetch("api/status")).json();
+  models = s.models;
+  const stats = $("#stats");
+  stats.replaceChildren();
+  const add = (label, value) => {
+    const c = el("span", "stat"); c.append(label + " ");
+    c.append(el("b", null, value)); stats.append(c);
+  };
+  add("cash", money(s.cash_usd));
+  add("max order", money(s.largest_allowed_order_usd));
+  add("holdings", String(s.holdings.length));
+  add("tax", `${s.tax.short_term_pct}% / ${s.tax.long_term_pct}%` + (s.tax.assumed ? " (assumed)" : ""));
+  add("neutral", s.models.neutral);
+  if (s.models.aggressive !== s.models.neutral) add("others", s.models.aggressive);
+  return s;
+}
+
+async function loadHistory(activeId) {
+  const list = await (await fetch("api/debates")).json();
+  const box = $("#history");
+  box.replaceChildren();
+  if (!list.length) { box.append(el("div", "empty", "None yet.")); return; }
+  for (const d of list) {
+    const item = el("div", "item" + (d.id === activeId ? " on" : ""));
+    const left = el("span");
+    left.append(el("b", null, d.symbol), " ", el("small", null, (d.started_at || "").slice(0, 16).replace("T", " ")));
+    const right = el("small", null, (d.outcome || "").replace("_", " ") + (d.size_usd ? " " + money(d.size_usd) : ""));
+    item.append(left, right);
+    item.onclick = () => showDebate(d.id);
+    box.append(item);
+  }
+}
+
+function header(symbol, asOf, pillText, live) {
+  const main = $("#main");
+  main.replaceChildren();
+  const t = el("div", "title");
+  t.append(el("h3", null, symbol));
+  if (asOf) t.append(el("span", "pill", "as of " + asOf));
+  const pill = el("span", "pill" + (live ? " live" : ""), pillText);
+  pill.id = "statusPill";
+  t.append(pill);
+  main.append(t);
+  const research = el("details", "research");
+  research.id = "research";
+  research.append(el("summary", null, live ? "Research: gathering evidence…" : "Research"));
+  main.append(research);
+  const rounds = el("div"); rounds.id = "rounds"; main.append(rounds);
+}
+
+function setPill(text, live) {
+  const p = $("#statusPill"); if (!p) return;
+  p.textContent = text; p.className = "pill" + (live ? " live" : "");
+}
+
+function renderResearch(r) {
+  const box = $("#research");
+  box.replaceChildren(el("summary", null, `Research: ${r.observations.length} cited observations`));
+  const ul = el("ul", "obs");
+  for (const o of r.observations) {
+    const li = el("li"); li.append(el("span", "tag", o.specialty.replace("_", " ")), o.text);
+    ul.append(li);
+  }
+  box.append(ul);
+  if (r.flags && r.flags.length) {
+    const flags = el("div", "flags");
+    for (const f of r.flags) flags.append(el("span", "flag", f.replaceAll("_", " ")));
+    box.append(flags);
+  }
+}
+
+function roundBox(n) {
+  let box = $(`#round-${n}`);
+  if (box) return box;
+  box = el("section", "round"); box.id = `round-${n}`;
+  box.append(el("h4", null, `Round ${n}`));
+  const cols = el("div", "cols");
+  for (const m of MEMBERS) {
+    const card = el("div", `card ${m}`); card.dataset.member = m;
+    const who = el("div", "who"); who.append(m[0].toUpperCase() + m.slice(1));
+    if (models[m]) who.append(el("small", null, models[m]));
+    card.append(who, el("div", "waiting", "deliberating"));
+    cols.append(card);
+  }
+  box.append(cols);
+  $("#rounds").append(box);
+  return box;
+}
+
+function renderBallot(n, b) {
+  const card = $(`[data-member="${b.member}"]`, roundBox(n));
+  card.replaceChildren(card.firstChild);
+  card.append(el("span", "action", actionLabel(b)));
+  if (b.request) card.append(el("p", "request", "“" + b.request + "”"));
+  card.append(el("p", "argument", b.argument));
+}
+
+function renderRoundResult(n, r) {
+  const box = roundBox(n);
+  const res = el("div", "result");
+  res.append(el("b", null, r.result.replace("_", " ")), r.detail || "");
+  box.append(res);
+  for (const rep of r.reports || []) {
+    const div = el("div", "report");
+    const note = rep.report && (rep.report.note || rep.report.summary) || JSON.stringify(rep.report);
+    div.append(el("b", null, `Report from ${rep.team}: `), note);
+    box.append(div);
+  }
+}
+
+function renderOutcome(o) {
+  const kind = o.type === "error" ? "error" : o.outcome;
+  const text = o.type === "error" ? "Error" :
+    { invest: "Decision: INVEST " + money(o.size_usd), replace: "Decision: REPLACE " + money(o.size_usd),
+      pass: "Decision: PASS", send_back: "Sent back for revision",
+      no_consensus: "No consensus: shelved" }[o.outcome] || o.outcome;
+  const div = el("div", "outcome " + kind, text);
+  div.append(el("small", null, o.type === "error" ? o.message
+    : `after ${o.rounds || o.rounds_used} round(s)`));
+  $("#rounds").append(div);
+}
+
+function watch(runId, symbol, asOf) {
+  if (source) source.close();
+  header(symbol, asOf, "researching", true);
+  source = new EventSource(`api/runs/${runId}/events`);
+  source.onmessage = (msg) => {
+    const ev = JSON.parse(msg.data);
+    if (ev.type === "started") { models = {...models, ...ev.models}; }
+    else if (ev.type === "research") { renderResearch(ev); roundBox(1); setPill("round 1: deliberating", true); }
+    else if (ev.type === "ballot") renderBallot(ev.round, ev.ballot);
+    else if (ev.type === "round") {
+      renderRoundResult(ev.round, ev);
+      if (ev.result === "continue" || ev.result === "request_info") {
+        roundBox(ev.round + 1); setPill(`round ${ev.round + 1}: deliberating`, true);
+      }
+    }
+    else if (ev.type === "outcome" || ev.type === "error") {
+      // a trailing empty round box is possible after the last round
+      document.querySelectorAll(".round").forEach(r => {
+        if (!r.querySelector(".action")) r.remove();
+      });
+      renderOutcome(ev); setPill(ev.type === "error" ? "failed" : "finished", false);
+      $("#go").disabled = false; loadHistory(ev.debate_id); loadStatus();
+    }
+  };
+  source.addEventListener("end", () => source.close());
+}
+
+async function showDebate(id) {
+  if (source) { source.close(); source = null; }
+  const d = await (await fetch(`api/debates/${id}`)).json();
+  header(d.symbol, d.research.as_of, "finished", false);
+  renderResearch(d.research);
+  for (const r of d.rounds) {
+    for (const b of r.ballots) renderBallot(r.round, b);
+    renderRoundResult(r.round, {result: r.result || "", detail: r.detail || "", reports: r.reports});
+  }
+  renderOutcome({type: "outcome", outcome: d.outcome, size_usd: d.size_usd, rounds: d.rounds_used});
+  loadHistory(id);
+}
+
+$("#form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#formMsg").textContent = "";
+  const symbol = $("#symbol").value.trim().toUpperCase();
+  const as_of = $("#asof").value || null;
+  $("#go").disabled = true;
+  const res = await fetch("api/runs", {method: "POST", headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({symbol, as_of})});
+  const body = await res.json();
+  if (!res.ok) { $("#formMsg").textContent = body.error; $("#go").disabled = false; return; }
+  watch(body.run_id, body.symbol, body.as_of);
+};
+
+(async () => {
+  const s = await loadStatus();
+  await loadHistory();
+  if (s.active_run) { $("#go").disabled = true; watch(s.active_run, "…", ""); }
+})();
+</script>
+</body>
+</html>

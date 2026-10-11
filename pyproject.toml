@@ -26,7 +26,8 @@ qfii = "qfii.cli:main"
 include = ["qfii*"]
 
 [tool.setuptools.package-data]
-qfii = ["default_config.toml", "schema.sql", "agents/*/prompt.md", "committee/prompts/*.md"]
+qfii = ["default_config.toml", "schema.sql", "agents/*/prompt.md", "committee/prompts/*.md",
+        "web/static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

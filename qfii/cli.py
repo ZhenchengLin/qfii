@@ -142,6 +142,16 @@ def _cmd_bench(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ui(cfg: Config, args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from .web.app import build_app
+
+    print(f"Qfii debate viewer on http://{args.host}:{args.port}/", flush=True)
+    uvicorn.run(build_app(cfg), host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
 def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
     import httpx
 
@@ -363,6 +373,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default="data/bench")
     p.add_argument("--verbose", action="store_true", help="print each round")
 
+    p = sub.add_parser("ui", help="web page to start and watch committee debates")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=3000)
+
     p = sub.add_parser("data", help="download market data into local files")
     p.add_argument("action", choices=["fetch"])
     p.add_argument("--symbols", nargs="*", default=[],
@@ -409,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
                 "schemas": _cmd_schemas, "bench": _cmd_bench,
+                "ui": _cmd_ui,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)
