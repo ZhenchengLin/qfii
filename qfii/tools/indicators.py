@@ -83,6 +83,7 @@ LABELS = {
     "excess_return_12m": "12-month return minus benchmark 12-month return",
     "beta_12m": "beta of daily log returns vs benchmark, last 252 trading days",
     "correlation_12m": "correlation of daily log returns with benchmark, last 252 trading days",
+    "avg_daily_dollar_volume_20d": "average daily dollar volume (close x shares), last 20 trading days",
 }
 
 

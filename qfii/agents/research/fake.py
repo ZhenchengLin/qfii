@@ -27,6 +27,7 @@ _LABELS = {
     "debt_to_equity": "Long-term debt to equity was {v:.2f}",
     "liabilities_to_assets": "Liabilities to assets was {v:.2f}",
     "eps_diluted": "Annual diluted EPS was ${v:.2f}",
+    "avg_daily_dollar_volume_20d": "Average daily dollar volume over 20 days was ${v:,.0f}",
 }
 _MONEY = {"revenue", "net_income", "operating_cash_flow", "total_assets", "total_liabilities",
           "stockholders_equity", "cash", "long_term_debt"}

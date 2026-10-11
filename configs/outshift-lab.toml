@@ -2,6 +2,8 @@
 # Values come from the lab's environment, so no key is written anywhere:
 #   LLM_MODEL, LLM_BASE_URL, LLM_API_KEY
 # The lab has no GPU (8 vCPU, 15 GB RAM, ~8 GB free disk): no local models.
+# gpt-6-luna is a reasoning model: max_output_tokens includes hidden reasoning,
+# so the caps are generous (measured: a 4096 cap left a Risk report empty).
 
 [data]
 source = "csv"
@@ -12,7 +14,7 @@ model = "env:LLM_MODEL"
 base_url = "env:LLM_BASE_URL"
 api_key_env = "LLM_API_KEY"
 num_ctx = 128000
-max_output_tokens = 4096
+max_output_tokens = 8192
 
 [models.strong]
 provider = "openai_compat"
@@ -20,7 +22,7 @@ model = "env:LLM_MODEL"
 base_url = "env:LLM_BASE_URL"
 api_key_env = "LLM_API_KEY"
 num_ctx = 128000
-max_output_tokens = 4096
+max_output_tokens = 16000
 
 [models.strongest]
 provider = "openai_compat"
@@ -28,7 +30,7 @@ model = "env:LLM_MODEL"
 base_url = "env:LLM_BASE_URL"
 api_key_env = "LLM_API_KEY"
 num_ctx = 128000
-max_output_tokens = 6144
+max_output_tokens = 16000
 
 [runtime]
 exclusive_models = false

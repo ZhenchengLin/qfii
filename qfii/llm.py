@@ -214,9 +214,15 @@ class OpenAICompatLLM(_Priced):
             raise LLMError(f"{self.base_url}: HTTP {resp.status_code}: {resp.text[:300]}")
         data = resp.json()
         try:
-            text = data["choices"][0]["message"]["content"] or ""
+            choice = data["choices"][0]
+            text = choice["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"unexpected response shape: {str(data)[:300]}") from exc
+        if not text.strip() and choice.get("finish_reason") == "length":
+            # reasoning models spend the output budget on hidden reasoning first
+            raise LLMError(f"{self.model} used all {self.max_output_tokens} output tokens "
+                           f"(including hidden reasoning) without answering; raise "
+                           f"max_output_tokens")
         usage = data.get("usage") or {}
         pt = int(usage.get("prompt_tokens") or _approx_tokens(system + user))
         ct = int(usage.get("completion_tokens") or _approx_tokens(text))

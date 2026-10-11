@@ -84,3 +84,10 @@ def test_env_values_resolved(monkeypatch):
     monkeypatch.delenv("QFII_TEST_MODEL")
     with pytest.raises(LLMError, match="QFII_TEST_MODEL"):
         build_llm(ModelSpec("openai_compat", "env:QFII_TEST_MODEL", "x"), None)
+
+
+async def test_openai_compat_empty_answer_at_length_cap_is_an_error():
+    body = {"choices": [{"message": {"content": ""}, "finish_reason": "length"}]}
+    http = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)))
+    with pytest.raises(LLMError, match="hidden reasoning"):
+        await OpenAICompatLLM("http://x/v1", "m", http_client=http).complete("s", "u")

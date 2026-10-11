@@ -62,6 +62,11 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str) -> Collected:
             {"n": hist["n"], "first_date": bars[0]["date"], "last_date": bars[-1]["date"],
              "last_close": bars[-1]["close"], "bars": bars},
             {"last_n": len(bars)}, date=bars[-1]["date"])
+        tail = bars[-20:]
+        adv = round(sum(b["close"] * b["volume"] for b in tail) / len(tail), 2)
+        add("calc", f"mcp:get_price_history/{hist['source']}", "technical",
+            "avg_daily_dollar_volume_20d", adv,
+            {"name": "avg_daily_dollar_volume_20d", "value": adv}, {"window_days": len(tail)})
     for name, item in ind["indicators"].items():
         if item["value"] is None:
             gaps.append(f"{name} unavailable: not enough history")
