@@ -7,11 +7,11 @@ about them before any (paper) money moves.
 | Agent | Role | Model tier | Status |
 |---|---|---|---|
 | Research | Undergrads: continuous discovery, cited facts only | mid | **built** |
-| Assessment | TAs: thesis, arguments, critique, verdict | strong | waiting on Ben's spec |
-| Risk & Validation | Independent reviewers: challenge the proposal | strong | waiting on Ben's spec |
-| Committee: Aggressive | Weighs fundamental upside over near-term downside | strong | waiting on Ben's spec |
-| Committee: Conservative | Weighs downside protection over upside | strong | waiting on Ben's spec |
-| Committee: Neutral | Balances both vs the S&P 500; tracks cash, positions, costs, holding period, taxes | strongest | waiting on Ben's spec |
+| Assessment | TAs: cited proposal, answers the committee, revises after a send-back | strong | **built** (draft format) |
+| Risk & Validation | Only when commissioned: re-checks with the Research tools, portfolio impact | strong | **built** (draft format) |
+| Committee: Aggressive | Weighs fundamental upside over near-term downside | strong | **built** |
+| Committee: Conservative | Weighs downside protection over upside | strong | **built** |
+| Committee: Neutral | Balances both vs the S&P 500; tracks cash, positions, costs, holding period, taxes | strongest | **built** |
 
 The three committee members replace a single Central Allocator. Each round they
 argue and cast equal-weight ballots: invest, replace (sell a holding for this
@@ -35,6 +35,31 @@ Rules the code enforces: LLMs never compute numbers (MCP tools do); every
 observation must cite an evidence id that exists; invalid LLM output is
 retried once with the reason, then fails visibly; tools never return data after
 the `as_of` cutoff; execution mode can only be `paper`.
+
+## Watch a debate (UI)
+
+```bash
+.venv/bin/qfii --config <config> ui            # http://127.0.0.1:3000
+```
+
+Type a ticker, start a debate, and watch it stream: research facts, the
+Assessment proposal, every member's ballot and argument as it is cast, team
+reports (Risk findings by severity, checked assumptions), and the outcome.
+Past debates are listed on the left.
+
+### In the Outshift AGNTCY lab (hosted model, no GPU)
+
+The lab provides `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` (a LiteLLM proxy;
+measured: `azure/gpt-6-luna`, ~4 s per ballot). `configs/outshift-lab.toml` reads
+them from the environment, so no key is ever written to a file.
+
+```bash
+cd ~/work && git clone https://github.com/ZhenchengLin/qfii.git && cd qfii
+bash scripts/lab-up.sh        # installs, fetches data, starts the UI
+```
+
+Open `https://<your-lab>.labs.outshift.com:6100` (the lab proxies :6100 to :3000).
+Re-run `bash scripts/lab-up.sh` after pushing new code.
 
 ## Run it
 
