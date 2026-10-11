@@ -130,6 +130,25 @@ class Ballot(BaseModel):
     request: str | None = Field(default=None, max_length=1500)
     note_to_self: str | None = Field(default=None, max_length=500)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_unused_fields(cls, data: Any) -> Any:
+        """Models fill every field ("target": "", "size_usd": 0). Drop the ones the
+        chosen action does not use, and empty strings, before validating."""
+        if not isinstance(data, dict):
+            return data
+        data = {k: v for k, v in data.items()
+                if not (isinstance(v, str) and not v.strip() and k != "argument")}
+        action = data.get("action")
+        unused = {"invest": ("replace_symbol", "target", "request"),
+                  "replace": ("target", "request"),
+                  "request_info": ("size_usd", "replace_symbol"),
+                  "send_back": ("size_usd", "replace_symbol")}.get(
+            action, ("size_usd", "replace_symbol", "target", "request"))
+        for key in unused:
+            data.pop(key, None)
+        return data
+
     @model_validator(mode="after")
     def _fields_match_action(self) -> Ballot:
         if self.action in ("invest", "replace") and not self.size_usd:

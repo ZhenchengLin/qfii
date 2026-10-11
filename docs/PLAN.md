@@ -58,6 +58,19 @@ Committee protocol (Ben, 2026-10-10), implemented in `qfii/committee/`:
   - `configs/team-gpu.toml`: the real 27B for Neutral on a Brev GPU (all three models loaded side by side).
   - `configs/dev-ollama.toml`: 9B only, for quick checks.
 
+### Measured on the 16 GB M1 Pro (option B, 2026-10-10)
+
+| What | Result |
+|---|---|
+| Memory | R1 14B at 12k context = 10.0 GB, fully on the GPU; the 9B = 5.6 GB |
+| Speed | ~10 tokens/s generated on the 14B; prompts ~3.3–3.9k tokens; ~100–125 s per ballot |
+| One debate (research + 3 rounds) | 32 min, including retries |
+| Ollama + R1 + JSON schema + thinking | HTTP 500, so the schema is off for R1 (`json_schema = false`) |
+| Live outcome, NVDA | Aggressive invest $10k, Conservative pass ×3, Neutral asked Assessment for fundamentals: no consensus, shelved |
+| Failures fixed from the live runs | `size_usd: 0` and `"target": ""` on unused fields; runaway thinking (output cap); size over the limit (cap shown and enforced); 3 failures counted as a "pass" (now an abstention) |
+
+For the demo, the GPU setup is needed: ~30 min per stock is too slow to show live.
+
 ## Ben's rules, 2026-10-10 (second batch)
 
 | Rule | Status |

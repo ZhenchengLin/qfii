@@ -15,6 +15,7 @@ the same time, so nobody anchors on another member's ballot within a round.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -133,8 +134,11 @@ def _transcript_entry(rec: RoundRecord) -> dict[str, Any]:
 
 
 async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
-                     rules: Committee, memories: dict[str, list[str]] | None = None
+                     rules: Committee, memories: dict[str, list[str]] | None = None,
+                     on_round: Callable[[str, RoundRecord], None] | None = None
                      ) -> DebateResult:
+    """on_round(symbol, record) is called as each round finishes, so a user can
+    watch the debate live."""
     names = sorted(m.name for m in members)
     if names != sorted(COMMITTEE):
         raise ValueError(f"committee must be exactly {COMMITTEE}, got {names}")
@@ -152,8 +156,6 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
         rec = RoundRecord(r, ballots, outcome)
         rounds.append(rec)
 
-        if outcome.kind in FINAL_OUTCOMES:
-            return DebateResult(outcome.kind, rounds, outcome)
         if outcome.kind == "request_info" and r < rules.max_rounds:
             for team in outcome.teams:
                 report = await teams.report(team, outcome.requests, dossier)
@@ -161,5 +163,9 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
                          "report": report}
                 rec.reports.append(entry)
                 reports.append(entry)
+        if on_round:
+            on_round(dossier.symbol, rec)
+        if outcome.kind in FINAL_OUTCOMES:
+            return DebateResult(outcome.kind, rounds, outcome)
 
     return DebateResult("no_consensus", rounds, None)

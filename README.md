@@ -70,7 +70,23 @@ printf '[data]\nsource = "csv"\n' > config.local.toml   # use it
 mcp_url = "http://127.0.0.1:9100/mcp"
 ```
 
-To use a real model for Research, e.g. an NVIDIA NIM or Ollama endpoint:
+### Real models
+
+On a 16 GB Apple Silicon Mac (option B: Research on Qwen3.5 9B, everything else
+on DeepSeek-R1 14B, one model in memory at a time):
+
+```bash
+ollama pull qwen3.5:9b && ollama pull deepseek-r1:14b
+.venv/bin/qfii data fetch
+.venv/bin/qfii --config configs/mac-local.toml setup --capital 100000 --income 90000
+.venv/bin/qfii --config configs/mac-local.toml debate NVDA
+```
+
+Measured on an M1 Pro: about 100–125 s per committee ballot, so one debate
+takes roughly 15–20 minutes. On a GPU machine (Brev), `configs/team-gpu.toml` adds
+Qwen3.5 27B for Neutral and keeps all three models loaded.
+
+Any OpenAI-compatible endpoint also works (vLLM, NIM, LM Studio, OpenAI):
 
 ```toml
 [models.mid]

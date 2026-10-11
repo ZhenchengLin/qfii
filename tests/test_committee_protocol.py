@@ -98,3 +98,20 @@ def test_irrelevant_fields_dropped():
     ballot = Ballot(member="neutral", action="pass", argument="x", size_usd=5, target="risk",
                     request="q")
     assert (ballot.size_usd, ballot.target, ballot.request) == (None, None, None)
+
+
+@pytest.mark.parametrize("reply", [
+    # observed from DeepSeek-R1 14B on 2026-10-10: every field filled in
+    {"action": "pass", "argument": "too risky", "size_usd": 0, "replace_symbol": "",
+     "target": "", "request": "", "note_to_self": ""},
+    {"action": "invest", "argument": "upside", "size_usd": 10000, "replace_symbol": "",
+     "target": "none", "request": ""},
+    {"action": "request_info", "argument": "need data", "size_usd": 0, "replace_symbol": "",
+     "target": "assessment", "request": "fundamentals?"},
+])
+def test_filled_in_unused_fields_are_dropped(reply):
+    ballot = Ballot(member="neutral", **reply)
+    assert ballot.action == reply["action"]
+    if ballot.action != "request_info":
+        assert ballot.target is None and ballot.request is None
+    assert ballot.replace_symbol is None and ballot.note_to_self is None

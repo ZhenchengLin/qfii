@@ -84,29 +84,36 @@ def _cmd_research(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_round(symbol: str, rec) -> None:
+    print(f"\n-- {symbol} round {rec.round} --", flush=True)
+    for b in rec.ballots:
+        extra = ""
+        if b.size_usd:
+            extra = f" ${b.size_usd:,.0f}"
+        if b.replace_symbol:
+            extra += f" (sell {b.replace_symbol})"
+        if b.target:
+            extra = f" -> {b.target}: {b.request}"
+        print(f"  {b.member:<12} {b.action}{extra}")
+        print(f"  {'':<12} {b.argument}")
+    print(f"  => {rec.outcome.kind}: {rec.outcome.detail}")
+    for rep in rec.reports:
+        print(f"  report from {rep['team']}: {rep['report'].get('note', rep['report'])}")
+    print(flush=True)
+
+
 def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
     from .committee.runner import run_paper
 
     conn = connect(cfg.db_path)
     init_db(conn, cfg.limits.starting_cash_usd)
-    run = asyncio.run(run_paper(cfg, conn, args.symbol, args.as_of, save=args.save))
-    print(f"{run.packet.symbol} as of {run.packet.as_of}: {len(run.packet.observations)} "
-          f"research observations, flags: {', '.join(run.packet.quality_flags)}")
-    for rec in run.debate.rounds:
-        print(f"\n-- round {rec.round} --")
-        for b in rec.ballots:
-            extra = ""
-            if b.size_usd:
-                extra = f" ${b.size_usd:,.0f}"
-            if b.replace_symbol:
-                extra += f" (sell {b.replace_symbol})"
-            if b.target:
-                extra = f" -> {b.target}: {b.request}"
-            print(f"  {b.member:<12} {b.action}{extra}")
-            print(f"  {'':<12} {b.argument}")
-        print(f"  => {rec.outcome.kind}: {rec.outcome.detail}")
-        for rep in rec.reports:
-            print(f"  report from {rep['team']}: {rep['report'].get('note', rep['report'])}")
+
+    def on_research(packet) -> None:
+        print(f"{packet.symbol} as of {packet.as_of}: {len(packet.observations)} research "
+              f"observations, flags: {', '.join(packet.quality_flags)}", flush=True)
+
+    run = asyncio.run(run_paper(cfg, conn, args.symbol, args.as_of, save=args.save,
+                                on_research=on_research, on_round=_print_round))
     size = f" ${run.debate.size_usd:,.0f}" if run.debate.size_usd else ""
     print(f"\nOUTCOME: {run.debate.outcome}{size} after {len(run.debate.rounds)} round(s)"
           + (f"  (paper #{run.paper_id}, debate #{run.debate_id})" if run.paper_id else ""))
