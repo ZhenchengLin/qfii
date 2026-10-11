@@ -25,7 +25,7 @@ async def test_chat_request_shape_and_separate_thinking():
     body = seen["body"]
     assert seen["path"] == "/api/chat"
     assert body["think"] is True and body["format"] == {"type": "object"}
-    assert body["options"] == {"temperature": 0.0, "num_ctx": 8192}
+    assert body["options"] == {"temperature": 0.0, "num_ctx": 8192, "num_predict": 4096}
     assert body["messages"] == [{"role": "user", "content": "sys\n\n---\n\nuser"}]
     assert (result.text, result.thinking, result.prompt_tokens) == ('{"a": 1}', "hmm", 120)
 
@@ -67,4 +67,12 @@ def test_split_thinking_and_parse():
 async def test_ollama_http_error():
     llm = ollama(lambda r: httpx.Response(404, text="model 'x' not found"))
     with pytest.raises(LLMError, match="404"):
+        await llm.complete("s", "u")
+
+
+async def test_thinking_that_hits_the_cap_is_an_error():
+    llm = ollama(lambda r: httpx.Response(200, json={
+        "message": {"content": "", "thinking": "and then " * 500}, "done_reason": "length"}),
+        max_output_tokens=512)
+    with pytest.raises(LLMError, match="used all 512 output tokens"):
         await llm.complete("s", "u")

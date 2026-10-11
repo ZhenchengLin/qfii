@@ -5,7 +5,7 @@ import pytest
 
 from qfii.committee.engine import Dossier, run_debate
 from qfii.committee.fake import fake_member_responder
-from qfii.committee.members import LLMMember, build_members
+from qfii.committee.members import LLMMember, build_members, read_member_prompt
 from qfii.committee.memory import recall, recall_all, remember
 from qfii.committee.runner import run_paper
 from qfii.config import COMMITTEE, load_config
@@ -95,12 +95,29 @@ async def test_send_back_ends_debate():
     assert result.outcome == "send_back" and result.final.teams == ["assessment"]
 
 
-async def test_failing_member_counts_as_pass_and_cannot_force_trade():
+async def test_failing_member_abstains_and_cannot_decide_anything():
     members = [Scripted("aggressive", INV, INV, INV), Scripted("neutral", INV, INV, INV),
                Scripted("conservative", ValueError("bad json"), PASS, PASS)]
     result = await run_debate(dossier(), members, Teams(), RULES)
     assert result.outcome == "no_consensus"
-    assert result.rounds[0].ballots[2].argument.startswith("[invalid ballot")
+    assert result.rounds[0].ballots[2].action == "abstain"
+    assert result.rounds[0].ballots[2].argument.startswith("[no valid ballot")
+
+
+async def test_three_failures_do_not_produce_a_pass():
+    """Live run, 2026-10-10: three broken ballots used to count as a unanimous pass."""
+    members = [Scripted(m, *[RuntimeError("timeout")] * 3) for m in COMMITTEE]
+    result = await run_debate(dossier(), members, Teams(), RULES)
+    assert result.outcome == "no_consensus"
+    assert all(b.action == "abstain" for r in result.rounds for b in r.ballots)
+
+
+def test_zero_size_on_non_trade_ballot_is_accepted():
+    """Live run: the model filled size_usd = 0 on a pass and the ballot was rejected."""
+    b = Ballot(member="neutral", action="pass", argument="x", size_usd=0)
+    assert b.size_usd is None
+    with pytest.raises(ValueError):
+        Ballot(member="neutral", action="invest", argument="x", size_usd=0)
 
 
 async def test_members_see_only_their_own_memory():
@@ -124,8 +141,21 @@ async def test_llm_member_cannot_sign_as_someone_else():
                                           Scripted("neutral", PASS)], Teams(), RULES)
     assert result.rounds[0].ballots[0].member == "conservative"
     system, user = llm.prompts[0]
-    assert "CONSERVATIVE member" in system and "Ballot actions" in system
-    assert json.loads(user)["you_are"] == "conservative"
+    assert "Ballot actions" in system and "CONSERVATIVE member" in user
+    assert read_member_prompt(user)["you_are"] == "conservative"
+
+
+async def test_members_share_a_prompt_prefix_and_retry_with_feedback():
+    replies = iter(["not json", json.dumps({"action": "pass", "argument": "ok"})])
+    llms = {m: FakeLLM(lambda s, u, m=m: next(replies) if m == "neutral"
+                       else json.dumps({"action": "pass", "argument": "x"})) for m in COMMITTEE}
+    members = [LLMMember(m, llms[m]) for m in COMMITTEE]
+    result = await run_debate(dossier(), members, Teams(), RULES)
+    assert result.outcome == "pass"
+    prefixes = {llms[m].prompts[0][1].split("## You")[0] for m in COMMITTEE}
+    assert len(prefixes) == 1  # identical shared part -> prompt cache hit
+    assert "your_previous_reply_was_rejected_because" in llms["neutral"].prompts[1][1]
+    assert [c["ok"] for c in members[2].calls] == [False, True]
 
 
 def test_memory_isolation_in_db():
@@ -178,7 +208,9 @@ def test_fake_responder_passes_when_no_room():
             "portfolio": {"cash_usd": 10000, "equity_usd": 100000, "holdings": [],
                           "limits": {"max_order_usd": 10000, "max_position_pct": 10,
                                      "min_cash_pct": 20}}}
-    reply = json.loads(fake_member_responder("aggressive")("", json.dumps(view)))
+    user = json.dumps(view) + "\n\n## You\npersona\n" + json.dumps({"you_are": "aggressive",
+                                                                  "your_memory": []})
+    reply = json.loads(fake_member_responder("aggressive")("", user))
     assert reply["action"] == "pass"
 
 

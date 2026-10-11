@@ -25,7 +25,9 @@ def _max_order(portfolio: dict) -> float:
 
 def fake_member_responder(member: str) -> Callable[[str, str], str]:
     def respond(system: str, user: str) -> str:
-        view = json.loads(user)
+        from .members import read_member_prompt
+
+        view = read_member_prompt(user)
         r = view["round"]
         cap = _max_order(view["portfolio"])
         if cap < 100:

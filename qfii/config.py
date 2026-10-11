@@ -40,6 +40,7 @@ class ModelSpec:
     temperature: float = 0.0
     merge_system_prompt: bool = False
     timeout_s: float = 600.0
+    max_output_tokens: int = 4096
 
 
 @dataclass(frozen=True)
@@ -187,6 +188,7 @@ def _build(raw: dict[str, Any]) -> Config:
             float(_number(spec, "temperature", where, lo=0, hi=2)),
             spec["merge_system_prompt"],
             float(_number(spec, "timeout_s", where, lo=1)),
+            int(_number(spec, "max_output_tokens", where, lo=16, integer=True)),
         )
 
     agents = {}

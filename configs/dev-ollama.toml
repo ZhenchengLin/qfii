@@ -1,5 +1,5 @@
 # 16 GB Mac development: every tier on the installed qwen3.5:9b (one load, no
-# swaps). Swap in configs/local-ollama.toml on bigger hardware.
+# swaps). See configs/mac-local.toml and configs/team-gpu.toml.
 
 [data]
 source = "csv"

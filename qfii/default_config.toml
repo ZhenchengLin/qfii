@@ -13,8 +13,10 @@ db = "data/qfii.db"
 #   than silently truncated. think: let reasoning models think first (the
 #   thinking is kept out of the parsed answer). merge_system_prompt: put the
 #   system prompt in the user turn (recommended for DeepSeek-R1 distills).
+# max_output_tokens: cap on generated tokens INCLUDING thinking. A reply that
+#   hits it is invalid and retried once, instead of thinking until a timeout.
 # usd_per_m_input / usd_per_m_output: price per million tokens, for budgets.
-# See configs/local-ollama.toml for the team's Qwen3.5 / DeepSeek-R1 setup.
+# See configs/mac-local.toml (16 GB Mac) and configs/team-gpu.toml (GPU).
 [models.mid]
 provider = "fake"
 model = "fake-mid"
@@ -27,6 +29,7 @@ think = false
 temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
+max_output_tokens = 4096
 
 [models.strong]
 provider = "fake"
@@ -40,6 +43,7 @@ think = false
 temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
+max_output_tokens = 4096
 
 [models.strongest]
 provider = "fake"
@@ -53,6 +57,7 @@ think = false
 temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
+max_output_tokens = 4096
 
 # One LLM per team. daily_budget_usd caps spend per agent per day.
 [agents.research]

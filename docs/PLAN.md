@@ -53,7 +53,10 @@ Committee protocol (Ben, 2026-10-10), implemented in `qfii/committee/`:
   - `max_batch` keeps any model from starving the others.
 - **The three members don't need three models.** A member's "memory" is just its prompt, so they share a loaded model for free.
 - **Debates run in lockstep across stocks.** Every stock's high-tier ballots for a round are served by one load. The max-tier model stays loaded into the next round when it can. Test: 3 stocks × 3 rounds = 27 calls with 3 model swaps.
-- **This Mac (M1 Pro, 16 GB) cannot run the 27B.** It holds the 9B (5.6 GB measured). `configs/dev-ollama.toml` runs every tier on the 9B for development. `configs/local-ollama.toml` is the team setup for bigger hardware. A ~40 GB+ GPU (e.g. Brev) holds all three models at once, so set `exclusive_models = false` there.
+- **This Mac (M1 Pro, 16 GB) cannot run the 27B.** Plan (Zhen, 2026-10-10): option B now, GPU later.
+  - `configs/mac-local.toml`: Research on the 9B; every other agent on R1 14B with one shared context size, so a whole debate runs on one load.
+  - `configs/team-gpu.toml`: the real 27B for Neutral on a Brev GPU (all three models loaded side by side).
+  - `configs/dev-ollama.toml`: 9B only, for quick checks.
 
 ## Ben's rules, 2026-10-10 (second batch)
 

@@ -112,7 +112,9 @@ class EvidencePacket(BaseModel):
 # ---------------------------------------------------------------- committee
 
 Member = Literal["aggressive", "conservative", "neutral"]
-BallotAction = Literal["invest", "replace", "pass", "request_info", "send_back"]
+# "abstain" is never offered to a model: the engine records it when a member
+# produces no valid ballot, and it counts toward nothing.
+BallotAction = Literal["invest", "replace", "pass", "request_info", "send_back", "abstain"]
 Team = Literal["assessment", "risk", "both"]
 
 
@@ -122,7 +124,7 @@ class Ballot(BaseModel):
     member: Member
     action: BallotAction
     argument: str = Field(min_length=1, max_length=3000)
-    size_usd: float | None = Field(default=None, gt=0)
+    size_usd: float | None = Field(default=None, ge=0)
     replace_symbol: str | None = None
     target: Team | None = None
     request: str | None = Field(default=None, max_length=1500)
@@ -130,8 +132,8 @@ class Ballot(BaseModel):
 
     @model_validator(mode="after")
     def _fields_match_action(self) -> Ballot:
-        if self.action in ("invest", "replace") and self.size_usd is None:
-            raise ValueError(f"{self.action} needs size_usd")
+        if self.action in ("invest", "replace") and not self.size_usd:
+            raise ValueError(f"{self.action} needs a positive size_usd")
         if self.action == "replace" and not self.replace_symbol:
             raise ValueError("replace needs replace_symbol (the position to sell)")
         if self.action in ("request_info", "send_back") and not (self.target and self.request):
@@ -184,6 +186,8 @@ def ballot_reply_schema() -> dict[str, Any]:
     (the code signs ballots, so a member cannot vote as someone else)."""
     schema = Ballot.model_json_schema()
     schema["properties"].pop("member", None)
+    actions = schema["properties"]["action"]["enum"]
+    schema["properties"]["action"]["enum"] = [a for a in actions if a != "abstain"]
     schema["required"] = [r for r in schema.get("required", []) if r != "member"]
     return schema
 

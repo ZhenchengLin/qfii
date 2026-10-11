@@ -19,9 +19,25 @@ _PROMPTS = resources.files("qfii.committee").joinpath("prompts")
 BALLOT_SCHEMA = ballot_reply_schema()
 
 
-def system_prompt(member: str) -> str:
-    return (_PROMPTS.joinpath(f"{member}.md").read_text() + "\n"
-            + _PROMPTS.joinpath("protocol.md").read_text())
+MAX_ATTEMPTS = 2
+PROTOCOL = _PROMPTS.joinpath("protocol.md").read_text()
+_YOU = "\n\n## You\n"
+
+
+def member_prompt(view: DebateView, persona: str, feedback: str | None = None) -> str:
+    """Shared debate state first, the member's persona and private memory last, so
+    a local model can reuse the cached prompt prefix across all three members."""
+    private = view.private_dict()
+    if feedback:
+        private["your_previous_reply_was_rejected_because"] = feedback
+    return (json.dumps(view.shared_dict(), separators=(",", ":"), default=str) + _YOU
+            + persona + "\n" + json.dumps(private, separators=(",", ":"), default=str))
+
+
+def read_member_prompt(user: str) -> dict[str, Any]:
+    """Inverse of member_prompt, for scripted models."""
+    shared, _, rest = user.partition(_YOU)
+    return {**json.loads(shared), **json.loads(rest[rest.rindex("\n{") + 1:])}
 
 
 class LLMMember:
@@ -30,25 +46,31 @@ class LLMMember:
             raise ValueError(f"unknown committee member {name!r}")
         self.name = name
         self.llm = llm
-        self.system = system_prompt(name)
+        self.system = PROTOCOL
+        self.persona = _PROMPTS.joinpath(f"{name}.md").read_text()
         self.calls: list[dict[str, Any]] = []
 
     async def deliberate(self, view: DebateView) -> Ballot:
-        user = json.dumps(view.as_prompt_dict(), separators=(",", ":"), default=str)
-        try:
-            result = await self.llm.complete(self.system, user, BALLOT_SCHEMA)
-        except LLMError as exc:
-            self.calls.append(failed_call(self.llm, str(exc)))
-            raise
-        call = result.record()
-        self.calls.append(call)
-        try:
-            data = parse_json_object(result.text)
-            data["member"] = self.name  # a member cannot vote as someone else
-            return Ballot.model_validate(data)
-        except (ValueError, ValidationError) as exc:
-            call.update(ok=False, error=f"invalid ballot: {exc}"[:500])
-            raise ValueError(f"invalid ballot from {self.name}: {exc}") from exc
+        feedback = None
+        for _ in range(MAX_ATTEMPTS):
+            user = member_prompt(view, self.persona, feedback)
+            try:
+                result = await self.llm.complete(self.system, user, BALLOT_SCHEMA)
+            except LLMError as exc:
+                self.calls.append(failed_call(self.llm, str(exc)))
+                feedback = str(exc)
+                continue
+            call = result.record()
+            self.calls.append(call)
+            try:
+                data = parse_json_object(result.text)
+                data["member"] = self.name  # a member cannot vote as someone else
+                return Ballot.model_validate(data)
+            except (ValueError, ValidationError) as exc:
+                call.update(ok=False, error=f"invalid ballot: {exc}"[:500])
+                feedback = str(exc)[:500]
+        raise ValueError(f"no valid ballot from {self.name} after {MAX_ATTEMPTS} attempts: "
+                         f"{feedback}")
 
 
 def build_members(cfg: Config) -> list[LLMMember]:

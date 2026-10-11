@@ -1,11 +1,13 @@
-# Team setup (Zhen, 2026-10-10): three local models through Ollama, one loaded
-# at a time. Pull them first:
+# Team setup for a GPU machine (e.g. a Brev instance running Ollama). Reach it
+# through an SSH tunnel so base_url stays local:
+#   ssh -N -L 11434:localhost:11434 <brev-instance>
+# Pull the models on the GPU machine:
 #   ollama pull qwen3.5:27b      # max tier: neutral member      (~17 GB at Q4)
 #   ollama pull deepseek-r1:14b  # high tier: assessment, risk, aggressive, conservative (~9 GB)
 #   ollama pull qwen3.5:9b       # mid tier: research            (~6.6 GB)
-# Memory: the 27B needs a machine with more than 16 GB of GPU-usable memory
-# (e.g. a Brev GPU, or a 32 GB+ Mac). On a 16 GB Mac use configs/dev-ollama.toml.
-# On a GPU with ~40 GB+ you can hold all three: set exclusive_models = false.
+# Memory: all three (~33 GB at Q4 plus context) fit on a ~48 GB GPU, so models
+# stay loaded side by side (exclusive_models = false). On a smaller GPU set it
+# to true and the scheduler swaps them. On a 16 GB Mac use configs/mac-local.toml.
 
 [data]
 source = "csv"
@@ -23,13 +25,15 @@ num_ctx = 24576
 think = true             # R1 always reasons; Ollama returns it separately
 temperature = 0.6        # DeepSeek's recommended setting for R1 distills
 merge_system_prompt = true
+max_output_tokens = 6144
 
 [models.strongest]
 provider = "ollama"
 model = "qwen3.5:27b"
 num_ctx = 32768
 think = true
+max_output_tokens = 8192
 
 [runtime]
-exclusive_models = true
-max_concurrent_calls = 1
+exclusive_models = false
+max_concurrent_calls = 3

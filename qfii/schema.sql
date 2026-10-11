@@ -134,7 +134,7 @@ CREATE TABLE ballots (
     round           INTEGER NOT NULL CHECK (round BETWEEN 1 AND 10),
     member          TEXT NOT NULL CHECK (member IN ('aggressive', 'conservative', 'neutral')),
     action          TEXT NOT NULL CHECK (action IN ('invest', 'replace', 'pass', 'request_info',
-                                                    'send_back')),
+                                                    'send_back', 'abstain')),
     size_usd        REAL CHECK (size_usd IS NULL OR size_usd > 0),
     replace_symbol  TEXT,
     target          TEXT CHECK (target IN ('assessment', 'risk', 'both')),

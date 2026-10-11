@@ -48,9 +48,10 @@ class DebateView:
     memory: list[str]
     rules: dict[str, Any]
 
-    def as_prompt_dict(self) -> dict[str, Any]:
+    def shared_dict(self) -> dict[str, Any]:
+        """Identical for all three members in a round (prompt-cache friendly)."""
         return {
-            "you_are": self.member, "round": self.round, "max_rounds": self.max_rounds,
+            "round": self.round, "max_rounds": self.max_rounds,
             "final_round": self.round == self.max_rounds, "rules": self.rules,
             "symbol": self.dossier.symbol, "assessment_proposal": self.dossier.proposal,
             "risk_report": self.dossier.risk_report or (
@@ -59,8 +60,13 @@ class DebateView:
                 "in additional_reports"),
             "portfolio": self.dossier.portfolio,
             "additional_reports": self.info_reports, "previous_rounds": self.transcript,
-            "your_memory": self.memory,
         }
+
+    def private_dict(self) -> dict[str, Any]:
+        return {"you_are": self.member, "your_memory": self.memory}
+
+    def as_prompt_dict(self) -> dict[str, Any]:
+        return {**self.shared_dict(), **self.private_dict()}
 
 
 class MemberAgent(Protocol):
@@ -107,10 +113,10 @@ async def _ballot(member: MemberAgent, view: DebateView) -> Ballot:
             raise ValueError(f"ballot signed by {ballot.member}, expected {member.name}")
         return ballot
     except (ValueError, ValidationError, RuntimeError) as exc:
-        # A member that cannot produce a valid ballot passes this round; it never
-        # blocks or forces a trade on its own.
-        return Ballot(member=member.name, action="pass",
-                      argument=f"[invalid ballot, counted as pass] {exc}"[:3000])
+        # No valid ballot: the member abstains this round. An abstention counts
+        # toward nothing, so a model failure can never decide an outcome.
+        return Ballot(member=member.name, action="abstain",
+                      argument=f"[no valid ballot, abstains] {exc}"[:3000])
 
 
 def _transcript_entry(rec: RoundRecord) -> dict[str, Any]:

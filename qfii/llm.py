@@ -103,8 +103,10 @@ class OllamaLLM(_Priced):
 
     def __init__(self, model: str, base_url: str = "", num_ctx: int = 16384,
                  think: bool = False, temperature: float = 0.0, merge_system: bool = False,
-                 timeout_s: float = 600.0, http_client: httpx.AsyncClient | None = None):
+                 timeout_s: float = 600.0, http_client: httpx.AsyncClient | None = None,
+                 max_output_tokens: int = 4096):
         self.model = model
+        self.max_output_tokens = max_output_tokens
         self.base_url = (base_url or OLLAMA_DEFAULT_URL).rstrip("/")
         self.num_ctx = num_ctx
         self.think = think
@@ -131,7 +133,8 @@ class OllamaLLM(_Priced):
         body: dict[str, Any] = {
             "model": self.model, "stream": False, "think": self.think,
             "messages": _messages(system, user, self.merge_system),
-            "options": {"temperature": self.temperature, "num_ctx": self.num_ctx},
+            "options": {"temperature": self.temperature, "num_ctx": self.num_ctx,
+                        "num_predict": self.max_output_tokens},
             "keep_alive": "30m",
         }
         if schema is not None:
@@ -148,6 +151,9 @@ class OllamaLLM(_Priced):
         thinking = message.get("thinking") or ""
         if not thinking:
             text, thinking = split_thinking(text)
+        if data.get("done_reason") == "length" and not text.strip():
+            raise LLMError(f"{self.model} used all {self.max_output_tokens} output tokens "
+                           f"(thinking {len(thinking)} chars) without answering")
         return LLMResult(text, self.provider, self.model, pt, ct, self._cost(pt, ct), thinking)
 
     async def unload(self, timeout_s: float = 60.0) -> None:
@@ -173,7 +179,9 @@ class OpenAICompatLLM(_Priced):
 
     def __init__(self, base_url: str, model: str, api_key: str | None = None,
                  http_client: httpx.AsyncClient | None = None, timeout: float = 600.0,
-                 temperature: float = 0.0, merge_system: bool = False):
+                 temperature: float = 0.0, merge_system: bool = False,
+                 max_output_tokens: int = 4096):
+        self.max_output_tokens = max_output_tokens
         self.base_url = base_url.rstrip("/")
         self.model = model
         self._api_key = api_key
@@ -189,6 +197,7 @@ class OpenAICompatLLM(_Priced):
         if schema is not None:
             fmt = {"type": "json_schema", "json_schema": {"name": "reply", "schema": schema}}
         body = {"model": self.model, "temperature": self.temperature, "response_format": fmt,
+                "max_tokens": self.max_output_tokens,
                 "messages": _messages(system, user, self.merge_system)}
         client = self._http or httpx.AsyncClient(timeout=self._timeout)
         try:
@@ -247,13 +256,15 @@ def build_llm(spec: ModelSpec, fake_responder: Callable[[str, str], str]) -> Any
         llm: Any = FakeLLM(fake_responder, spec.model)
     elif spec.provider == "ollama":
         llm = OllamaLLM(spec.model, spec.base_url, spec.num_ctx, spec.think, spec.temperature,
-                        spec.merge_system_prompt, spec.timeout_s)
+                        spec.merge_system_prompt, spec.timeout_s,
+                        max_output_tokens=spec.max_output_tokens)
     else:
         api_key = os.environ.get(spec.api_key_env) if spec.api_key_env else None
         if spec.api_key_env and not api_key:
             raise LLMError(f"environment variable {spec.api_key_env} is not set")
         llm = OpenAICompatLLM(spec.base_url, spec.model, api_key, timeout=spec.timeout_s,
-                              temperature=spec.temperature, merge_system=spec.merge_system_prompt)
+                              temperature=spec.temperature, merge_system=spec.merge_system_prompt,
+                              max_output_tokens=spec.max_output_tokens)
     llm.usd_per_m_input = spec.usd_per_m_input
     llm.usd_per_m_output = spec.usd_per_m_output
     return llm

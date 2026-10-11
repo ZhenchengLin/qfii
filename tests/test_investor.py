@@ -85,3 +85,26 @@ def test_v1_database_is_migrated(tmp_path):
     conn = connect(path)
     assert init_db(conn, 1000) is False
     assert schema_version(conn) == SCHEMA_VERSION and "investor_profile" in tables(conn)
+
+
+def test_v2_ballots_table_gets_abstain(tmp_path):
+    from qfii.db import MIGRATIONS
+
+    path = tmp_path / "v2.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE ballots (id INTEGER PRIMARY KEY, debate_id INTEGER, round INTEGER, "
+                 "member TEXT, action TEXT CHECK (action IN ('pass')), size_usd REAL, "
+                 "replace_symbol TEXT, target TEXT, request TEXT, argument TEXT, "
+                 "llm_call_id INTEGER, created_at TEXT)")
+    conn.execute("INSERT INTO ballots VALUES (1, 1, 1, 'neutral', 'pass', NULL, NULL, NULL, NULL, "
+                 "'a', NULL, 'now')")
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+    conn = connect(path)
+    conn.execute("PRAGMA foreign_keys = OFF")  # bare test table has no debates to reference
+    init_db(conn, 1000)
+    conn.execute("INSERT INTO ballots (debate_id, round, member, action, argument, created_at) "
+                 "VALUES (1, 2, 'neutral', 'abstain', 'x', 'now')")
+    assert conn.execute("SELECT COUNT(*) FROM ballots").fetchone()[0] == 2
+    assert 3 in MIGRATIONS

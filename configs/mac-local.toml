@@ -1,0 +1,45 @@
+# Option B (2026-10-10): the whole pipeline on a 16 GB Apple Silicon Mac.
+#   mid    qwen3.5:9b       Research                         ollama pull qwen3.5:9b
+#   high   deepseek-r1:14b  Assessment, Risk, Aggressive,    ollama pull deepseek-r1:14b
+#   max    deepseek-r1:14b  Conservative, and Neutral
+# High and max use the SAME model with the SAME num_ctx, so a whole committee
+# debate runs on one load (Ollama reloads a model if num_ctx changes). Neutral
+# keeps its job (whole portfolio, costs, taxes) through its prompt; it gets the
+# real 27B on the GPU setup (configs/team-gpu.toml).
+# Memory: the 14B is ~9 GB; its context cache grows with num_ctx, so keep
+# num_ctx modest. Prompts are ~3-4k tokens plus up to max_output_tokens of
+# thinking and answer.
+
+[data]
+source = "csv"
+
+[models.mid]
+provider = "ollama"
+model = "qwen3.5:9b"
+num_ctx = 12288
+think = false
+max_output_tokens = 3072
+
+[models.strong]
+provider = "ollama"
+model = "deepseek-r1:14b"
+num_ctx = 12288
+think = true
+temperature = 0.6
+merge_system_prompt = true
+max_output_tokens = 3072
+timeout_s = 900.0
+
+[models.strongest]
+provider = "ollama"
+model = "deepseek-r1:14b"
+num_ctx = 12288
+think = true
+temperature = 0.6
+merge_system_prompt = true
+max_output_tokens = 4096
+timeout_s = 900.0
+
+[runtime]
+exclusive_models = true
+max_concurrent_calls = 1
