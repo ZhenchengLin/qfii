@@ -113,3 +113,15 @@ def test_html_to_text_strips_markup():
     text = html_to_text("<html><body><h1>Results</h1><p>Revenue was $90&nbsp;billion</p>"
                         "<script>x()</script></body></html>")
     assert "Results" in text and "Revenue was $90" in text and "x()" not in text
+
+
+def test_valuation_metrics_from_close_and_10k():
+    from qfii.agents.evidence import valuation_metrics
+
+    annual = {"diluted_shares": 1_000, "net_income": 5_000, "revenue": 20_000,
+              "free_cash_flow": 2_500, "stockholders_equity": 10_000}
+    v = valuation_metrics(100.0, annual)
+    assert v == {"market_cap": 100_000, "pe_trailing_fy": 20.0, "price_to_sales_fy": 5.0,
+                 "fcf_yield_fy": 0.025, "price_to_book_fy": 10.0}
+    assert "pe_trailing_fy" not in valuation_metrics(100.0, {**annual, "net_income": -1})
+    assert valuation_metrics(100.0, {"revenue": 1}) == {}

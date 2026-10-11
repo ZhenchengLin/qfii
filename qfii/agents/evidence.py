@@ -36,6 +36,34 @@ class Collected:
         return ev
 
 
+def valuation_metrics(close: float, annual: dict) -> dict[str, float]:
+    """Trailing valuation from the last close and the latest 10-K, computed in code.
+    Market cap uses 10-K diluted shares (weighted average for the fiscal year)."""
+    shares = annual.get("diluted_shares")
+    if not close or not shares:
+        return {}
+    cap = close * shares
+    out = {"market_cap": round(cap, 2)}
+    if annual.get("net_income") and annual["net_income"] > 0:
+        out["pe_trailing_fy"] = round(cap / annual["net_income"], 4)
+    if annual.get("revenue"):
+        out["price_to_sales_fy"] = round(cap / annual["revenue"], 4)
+    if annual.get("free_cash_flow") is not None:
+        out["fcf_yield_fy"] = round(annual["free_cash_flow"] / cap, 6)
+    if annual.get("stockholders_equity"):
+        out["price_to_book_fy"] = round(cap / annual["stockholders_equity"], 4)
+    return out
+
+
+VALUATION_LABELS = {
+    "market_cap": "market capitalization (last close x 10-K diluted shares)",
+    "pe_trailing_fy": "price / earnings on the latest fiscal year (10-K)",
+    "price_to_sales_fy": "price / sales on the latest fiscal year (10-K)",
+    "fcf_yield_fy": "free-cash-flow yield on the latest fiscal year (10-K)",
+    "price_to_book_fy": "price / book value at the latest fiscal year end (10-K)",
+}
+
+
 # Filing searches Research always runs; Risk & Validation adds the committee's questions.
 DEFAULT_FILING_QUERIES = (
     "revenue growth demand outlook guidance",
@@ -123,6 +151,12 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str,
         for name, value in fund["derived"].items():
             add("calc", "mcp:get_sec_fundamentals/derived", "fundamental", name, value,
                 {"name": name, "value": value, "label": name.replace("_", " ")})
+        annual = (fund.get("annual") or {})
+        close = hist["bars"][-1]["close"] if hist["n"] else None
+        for name, value in valuation_metrics(close, annual.get("metrics") or {}).items():
+            add("calc", "code:valuation", "fundamental", name, value,
+                {"name": name, "value": value, "label": VALUATION_LABELS[name],
+                 "close_date": hist["bars"][-1]["date"], "filed": annual.get("filed")})
     elif fund.get("available"):
         for name, m in fund["metrics"].items():
             add("filing", f"mcp:get_fundamentals/SEC EDGAR {m['form']}", "fundamental",
