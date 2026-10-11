@@ -43,7 +43,11 @@ def _cmd_config(cfg: Config, args: argparse.Namespace) -> int:
     c = cfg.committee
     print(f"committee:  {', '.join(COMMITTEE)} (equal votes); trade={c.invest_rule}, "
           f"pass={c.pass_rule}, info/send-back={c.procedural_rule}, size within {c.size_tolerance_pct}%, "
-          f"max {c.max_rounds} rounds then shelve")
+          f"max {c.max_rounds} rounds then shelve"
+          + (f"; 2-of-3 pass after {c.majority_pass_after_unchanged_rounds} unchanged rounds"
+             if c.majority_pass_after_unchanged_rounds else "")
+          + (f"; stop after {c.stop_after_unchanged_rounds} unchanged rounds"
+             if c.stop_after_unchanged_rounds else ""))
     pf = cfg.portfolio
     print(f"portfolio:  benchmark={pf.benchmark} costs={pf.commission_bps}+{pf.slippage_bps}bps "
           f"long-term after {pf.long_term_after_days}d; tax rates from `qfii setup`")

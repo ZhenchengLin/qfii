@@ -78,6 +78,10 @@ def paper_metrics(symbol: str, run: Any, seconds: float,
         "debates": len(debates),
         "size_usd": last.size_usd if last and concluded else None,
         "decided_on_amendment": bool(last and last.final and last.final.amendment_id),
+        # an amendment with entry conditions ("do not enter until ...") is not an
+        # immediate buy: execution must hold it as a watchlist entry
+        "conditional": bool(last and last.final and (last.final.amendment or {})
+                            .get("conditions")),
         "assessment_verdict": run.proposal.verdict if run.proposal else None,
         "info_requests": len(reports),
         "report_failures": sum(1 for rep in reports if (rep.get("report") or {}).get("error")),
@@ -211,6 +215,7 @@ def markdown_report(rows: list[dict[str, Any]], summary: dict[str, Any]) -> str:
         size = f"${r['size_usd']:,.0f}" if r.get("size_usd") else ""
         lines.append(
             f"| {r['symbol']} | {r['outcome']}{' (amendment)' if r.get('decided_on_amendment') else ''}"
+            f"{' (conditional)' if r.get('conditional') else ''}"
             f" | {r.get('rounds_total', '')} | {r.get('debates', '')} | {size} "
             f"| {r.get('info_requests', 0)} ({r.get('report_failures', 0)}) "
             f"| {r.get('amendments', 0)} | {r.get('vote_changes', 0)} "
@@ -274,6 +279,8 @@ def replay_saved(conn: sqlite3.Connection, rules: Committee, paper_ids: list[int
             "rounds_to_conclusion": len(debates[-1][0]) if concluded else None,
             "rounds_total": actual.rounds, "debates": len(debates),
             "size_usd": actual.size_usd, "decided_on_amendment": bool(actual.amendment_id),
+            "conditional": bool(actual.amendment_id and _terms(debates, actual.amendment_id)
+                                .get("conditions")),
             "info_requests": n_reports or 0, "report_failures": n_failed or 0,
             "amendments": sum(1 for b in ballots if b.action == "propose"),
             "vote_changes": sum(1 for b in ballots if b.changed_because),
@@ -283,3 +290,12 @@ def replay_saved(conn: sqlite3.Connection, rules: Committee, paper_ids: list[int
             "seconds": None, "error": None, "what_if": what_if(debates, rules),
         })
     return {"summary": summarize(rows, rules.max_rounds), "papers": rows}
+
+
+def _terms(debates: list, amendment_id: str) -> dict[str, Any]:
+    for rounds, _ in debates:
+        for ballots in rounds:
+            for b in ballots:
+                if b.amendment_id == amendment_id and b.amendment is not None:
+                    return b.amendment.model_dump(exclude_none=True)
+    return {}

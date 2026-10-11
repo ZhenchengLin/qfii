@@ -77,7 +77,8 @@ def test_summary_separates_no_consensus_from_concluded():
 
 async def test_committee_agrees_on_an_amendment_end_to_end(cfg, conn, monkeypatch):
     amend = {"action": "propose", "amendment": {"size_usd": 4000, "summary": "half size",
-                                                "stop_loss_pct": 15}}
+                                                "stop_loss_pct": 15,
+                                                "conditions": ["enter after earnings"]}}
     support = {"action": "support", "amendment_id": "A1"}
     scripted_committee(monkeypatch, {
         "conservative": [amend, support],
@@ -95,6 +96,11 @@ async def test_committee_agrees_on_an_amendment_end_to_end(cfg, conn, monkeypatc
         "SELECT changed_because FROM ballots WHERE changed_because IS NOT NULL")]
     assert len(reasons) == 2
     assert [h[1] for h in history(conn, run.paper_id)][-1] == "decided"
+    from qfii.evaluate import paper_metrics, replay_saved
+
+    assert paper_metrics("NVDA", run, 1.0, cfg.committee)["conditional"] is True
+    saved = replay_saved(conn, cfg.committee, [run.paper_id])["papers"][0]
+    assert saved["conditional"] is True and saved["size_usd"] == 4000
 
 
 async def test_lone_question_gets_a_printed_report(cfg, conn, monkeypatch):

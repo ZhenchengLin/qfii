@@ -118,7 +118,7 @@ needs `changed_because`, like any vote change.
 | M5 | Assessment agent: proposal from the packet (draft format), answers committee questions, revises after a send-back | done (format still draft) |
 | M6 | Risk & Validation agent: on demand, re-collects evidence with the Research tools, adds code-computed portfolio impact | done (format still draft) |
 | M7 | Committee with real models; send-back loop with `max_send_backs`; members as A2A servers | after M5–M6 |
-| M8 | Execution: sizing from the agreed size, hard limits, paper broker, ledger, reconciliation | after M7 |
+| M8 | Execution: sizing from the agreed size, hard limits, paper broker, ledger, reconciliation. A decision on an amendment with `conditions` (e.g. "do not enter until ...") is a watchlist entry, not a buy: execute only once the conditions are met (seen live: NVDA, A2) | after M7 |
 | M9 | Dashboard: paper detail with the full debate transcript and votes per round; portfolio vs SPY | after M8 |
 | M10 | Evaluation vs baselines; OpenTelemetry traces; SLIM transport | stretch |
 
