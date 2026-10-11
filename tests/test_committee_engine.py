@@ -340,7 +340,7 @@ async def test_amendment_decision_is_saved_and_shown(cfg):
     detail = build_app(cfg).state.server.debate(did)
     assert detail["decision_terms"]["amendment_id"] == "A1"
     assert detail["amendments"][0]["proposed_by"] == "conservative"
-    aggressive_r2 = [b for b in detail["rounds"][1]["ballots"] if b["member"] == "aggressive"][0]
+    aggressive_r2 = next(b for b in detail["rounds"][1]["ballots"] if b["member"] == "aggressive")
     assert aggressive_r2["changed_because"] == "ok"   # the reason survives in history
     assert [r["result"] for r in detail["rounds"]] == ["continue", "invest"]
 
