@@ -99,23 +99,23 @@ def markdown_report(rows: list[dict[str, Any]], summary: dict[str, Any]) -> str:
     lines = [
         "# Qfii evaluation",
         "",
-        f"- Papers: {s['papers']} ({s['errors']} errors); reached the committee: "
-        f"{s['reached_committee']}",
+        (f"- Papers: {s['papers']} ({s['errors']} errors); reached the committee: "
+        f"{s['reached_committee']}"),
         f"- Concluded: {s['concluded']} (rate {s['conclusion_rate']})",
-        f"- **Average rounds to conclusion: {s['avg_rounds_to_conclusion']}** "
+        (f"- **Average rounds to conclusion: {s['avg_rounds_to_conclusion']}** "
         f"(median {s['median_rounds_to_conclusion']}, range "
-        f"{s['min_max_rounds_to_conclusion']}; limit {s['max_rounds_setting']})",
-        f"- Average rounds per debated paper, including no-consensus: "
-        f"{s['avg_rounds_all_debated']}",
+        f"{s['min_max_rounds_to_conclusion']}; limit {s['max_rounds_setting']})"),
+        (f"- Average rounds per debated paper, including no-consensus: "
+        f"{s['avg_rounds_all_debated']}"),
         f"- Outcomes: {s['outcomes']}",
         f"- Team reports: {s['info_requests']} requested, {s['report_failures']} failed",
-        f"- Amendments proposed: {s['amendments']}; decided on an amendment: "
+        (f"- Amendments proposed: {s['amendments']}; decided on an amendment: "
         f"{s['decided_on_amendment']}; vote changes: {s['vote_changes']}; "
-        f"invalid ballots: {s['abstentions']}",
+        f"invalid ballots: {s['abstentions']}"),
         f"- Average time per paper: {s['avg_seconds_per_paper']} s",
         "",
-        "| symbol | outcome | rounds | debates | size | reports (failed) | amendments "
-        "| changes | abstain | seconds |",
+        ("| symbol | outcome | rounds | debates | size | reports (failed) | amendments "
+        "| changes | abstain | seconds |"),
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
