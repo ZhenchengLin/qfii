@@ -170,6 +170,8 @@ class SecSource:
                 raise SecUnavailable("EdgarTools is not installed: pip install 'qfii[sec]'") \
                     from exc
             set_identity(identity)
+            for noisy in ("edgar", "httpx", "httpcore"):  # importing edgar re-enables these
+                logging.getLogger(noisy).setLevel(logging.WARNING)
             company_factory = Company
         self._company = company_factory
         self._companies: dict[str, Any] = {}

@@ -87,3 +87,14 @@ async def test_teams_report_shows_the_tool_trace(cfg):
     assert report["tool_trace"][0]["tool"] == "calculate"
     assert report["tool_trace"][0]["label"] == "twice the last close"
     assert "Calculated twice the last close" in report["answers"][1]["claim"]
+
+
+def test_large_results_keep_whole_items_not_cut_text():
+    from qfii.agents.tooluse import _trim
+
+    hits = {"hits": [{"rank": i, "text": f"passage {i} " + "x" * 2000} for i in range(12)]}
+    out = _trim(hits, 8000)
+    assert "truncated" not in out
+    assert out["hits"][0]["rank"] == 0                     # best hit kept
+    assert all(h["text"].startswith(f"passage {h['rank']} ") for h in out["hits"])
+    assert len(json.dumps(out)) <= 8000

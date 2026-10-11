@@ -25,7 +25,7 @@ from ..llm import LLM, LLMError, failed_call, parse_json_object
 from ..tools.client import ToolBox, ToolError
 
 T = TypeVar("T", bound=BaseModel)
-RESULT_CHARS = 6000          # cap per tool result shown to the model
+RESULT_CHARS = 12000         # cap per tool result shown to the model
 MAX_CALLS_PER_TURN = 4
 # never offered: superseded by the SEC tools, or raw series better read via indicators
 HIDDEN_TOOLS = {"get_fundamentals"}
@@ -44,20 +44,35 @@ net income) and cite its result. When you have what you need, give "final".
 """
 
 
-def _trim(value: Any, limit: int = RESULT_CHARS) -> Any:
-    text = json.dumps(value, default=str)
-    if len(text) <= limit:
-        return value
+def _shorten(value: Any, text_cap: int) -> Any:
+    if isinstance(value, str):
+        return value if len(value) <= text_cap else value[:text_cap] + " …"
+    if isinstance(value, list):
+        return [_shorten(v, text_cap) for v in value[-30:]]   # long series: latest 30
     if isinstance(value, dict):
-        out = {}
-        for k, v in value.items():
-            if isinstance(v, list) and len(v) > 30:   # long series: keep the latest
-                v = v[-30:]
-            out[k] = v
-        text = json.dumps(out, default=str)
-        if len(text) <= limit:
+        return {k: _shorten(v, text_cap) for k, v in value.items()}
+    return value
+
+
+def _trim(value: Any, limit: int = RESULT_CHARS) -> Any:
+    """Fit a tool result into `limit` characters without cutting it mid-text:
+    shorten long strings first, then drop the least relevant list items (search
+    hits arrive best-first), and only as a last resort truncate."""
+    if len(json.dumps(value, default=str)) <= limit:
+        return value
+    for cap in (1500, 900, 500):
+        out = _shorten(value, cap)
+        if len(json.dumps(out, default=str)) <= limit:
             return out
-    return {"truncated": text[:limit]}
+    if isinstance(out, dict):
+        for key, items in list(out.items()):
+            while isinstance(items, list) and items and \
+                    len(json.dumps(out, default=str)) > limit:
+                items = items[:-1]
+                out[key] = items
+        if len(json.dumps(out, default=str)) <= limit:
+            return out
+    return {"truncated": json.dumps(out, default=str)[:limit]}
 
 
 def _evidence_for(tool: str, args: dict[str, Any], result: dict[str, Any],
