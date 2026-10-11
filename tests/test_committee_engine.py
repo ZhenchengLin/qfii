@@ -363,3 +363,16 @@ async def test_members_see_how_long_positions_have_been_unchanged():
     await run_debate(dossier(), members, Teams(), RULES)
     streaks = [v.as_prompt_dict()["rounds_with_unchanged_positions"] for v in members[0].views]
     assert streaks == [0, 1, 2]
+
+
+async def test_optional_stop_when_positions_stop_moving():
+    stuck = replace(RULES, max_rounds=20, stop_after_unchanged_rounds=3)
+    members = [Scripted("aggressive", INV, *[{"action": "invest", "size_usd": 9000}] * 19),
+               Scripted("conservative", *[PASS] * 20), Scripted("neutral", *[PASS] * 20)]
+    result = await run_debate(dossier(), members, Teams(), stuck)
+    # round 1 differs (size 5000), rounds 2-5 repeat: stop after round 5
+    assert result.outcome == "no_consensus" and len(result.rounds) == 5
+    assert "positions unchanged for 3 rounds" in result.rounds[-1].outcome.detail
+    off = replace(stuck, stop_after_unchanged_rounds=0)
+    members = [Scripted(m, *[PASS if m != "aggressive" else INV] * 20) for m in COMMITTEE]
+    assert len((await run_debate(dossier(), members, Teams(), off)).rounds) == 20

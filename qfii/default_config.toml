@@ -158,6 +158,9 @@ max_rounds = 20
 invest_rule = "unanimous"
 procedural_rule = "majority"
 info_request_rule = "any"
+# End the debate early (no consensus) once every member has repeated the same
+# ballot for this many rounds in a row. 0 = off: always run up to max_rounds.
+stop_after_unchanged_rounds = 0
 size_tolerance_pct = 10.0
 max_send_backs = 1
 memory_items = 20

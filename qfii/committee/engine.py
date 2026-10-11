@@ -205,5 +205,11 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
             on_round(dossier.symbol, rec)
         if outcome.kind in FINAL_OUTCOMES:
             return DebateResult(outcome.kind, rounds, outcome)
+        stop = rules.stop_after_unchanged_rounds
+        if stop and outcome.kind == "continue" and \
+                _unchanged_streak([_transcript_entry(x) for x in rounds]) > stop:
+            # the latest round repeated the previous `stop` rounds exactly: a deadlock
+            outcome.detail += f"; positions unchanged for {stop} rounds, debate ends"
+            return DebateResult("no_consensus", rounds, None)
 
     return DebateResult("no_consensus", rounds, None)
