@@ -125,3 +125,19 @@ def test_valuation_metrics_from_close_and_10k():
                  "fcf_yield_fy": 0.025, "price_to_book_fy": 10.0}
     assert "pe_trailing_fy" not in valuation_metrics(100.0, {**annual, "net_income": -1})
     assert valuation_metrics(100.0, {"revenue": 1}) == {}
+
+
+def test_repeated_searches_do_not_refetch(src):
+    calls = {"n": 0}
+    company = FakeCompany()
+    real = company.get_filings
+
+    def counting(form):
+        calls["n"] += 1
+        return real(form)
+
+    company.get_filings = counting
+    src._companies["EX"] = company
+    for q in ("chips", "competition", "datacenter", "pricing", "suppliers"):
+        src.search("EX", date(2026, 10, 9), q)
+    assert calls["n"] == 3   # 10-K, 10-Q, 8-K listed once each, not once per query

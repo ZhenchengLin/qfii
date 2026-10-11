@@ -38,6 +38,8 @@ ITEM_LABELS = {
 }
 PASSAGE_CHARS = 900
 log = logging.getLogger(__name__)
+for _noisy in ("edgar", "httpx", "httpcore"):  # EdgarTools logs every request at INFO
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 
 class SecUnavailable(RuntimeError):
@@ -171,6 +173,7 @@ class SecSource:
             company_factory = Company
         self._company = company_factory
         self._companies: dict[str, Any] = {}
+        self._memo: dict[tuple, Any] = {}   # (kind, symbol, as_of) -> result, this process
 
     # -------------------------------------------------- filing selection
     def company(self, symbol: str) -> Any:
@@ -207,12 +210,19 @@ class SecSource:
         path.write_text(json.dumps(value, default=str))
         return value
 
-    @staticmethod
-    def _meta(f: Any) -> dict[str, Any]:
-        return {"form": f.form, "filed": str(f.filing_date)[:10],
-                "period": str(getattr(f, "period_of_report", "") or "")[:10],
-                "accession": f.accession_no,
-                "url": getattr(f, "homepage_url", None) or getattr(f, "url", None)}
+    def _meta(self, symbol: str, f: Any) -> dict[str, Any]:
+        # period_of_report / urls can trigger a download of the filing header: cache them
+        return self._cached(symbol, f, "meta", lambda: {
+            "form": f.form, "filed": str(f.filing_date)[:10],
+            "period": str(getattr(f, "period_of_report", "") or "")[:10],
+            "accession": f.accession_no,
+            "url": getattr(f, "homepage_url", None) or getattr(f, "url", None)})
+
+    def _memoized(self, kind: str, symbol: str, as_of: date, build) -> Any:
+        key = (kind, symbol, as_of)
+        if key not in self._memo:
+            self._memo[key] = build()
+        return self._memo[key]
 
     # -------------------------------------------------- fundamentals
     def _statement_metrics(self, f: Any) -> dict[str, Any]:
@@ -250,6 +260,10 @@ class SecSource:
         return out
 
     def fundamentals(self, symbol: str, as_of: date) -> dict[str, Any]:
+        return self._memoized("fundamentals", symbol, as_of,
+                              lambda: self._fundamentals(symbol, as_of))
+
+    def _fundamentals(self, symbol: str, as_of: date) -> dict[str, Any]:
         result: dict[str, Any] = {"available": False, "entity": None}
         for form, key in (("10-K", "annual"), ("10-Q", "quarterly")):
             found = self.filings(symbol, form, as_of)
@@ -257,7 +271,7 @@ class SecSource:
                 continue
             f = found[0]
             metrics = self._cached(symbol, f, "metrics", lambda f=f: self._statement_metrics(f))
-            result[key] = {**self._meta(f), "metrics": metrics}
+            result[key] = {**self._meta(symbol, f), "metrics": metrics}
             result["available"] = True
         result["entity"] = getattr(self.company(symbol), "name", symbol)
         derived: dict[str, float] = {}
@@ -299,6 +313,9 @@ class SecSource:
                 "headline": headline[:300], "text": text[:20000]}
 
     def news(self, symbol: str, as_of: date, limit: int = 6) -> list[dict[str, Any]]:
+        return self._memoized("news", symbol, as_of, lambda: self._news(symbol, as_of, limit))
+
+    def _news(self, symbol: str, as_of: date, limit: int) -> list[dict[str, Any]]:
         since = as_of - timedelta(days=self.news_lookback_days)
         out = []
         for f in self.filings(symbol, "8-K", as_of, limit=limit, since=since):
@@ -306,7 +323,7 @@ class SecSource:
             codes = {i["code"] for i in data["items"]}
             if codes <= {"9.01"}:
                 continue  # exhibits only, nothing new
-            out.append({**self._meta(f), **data})
+            out.append({**self._meta(symbol, f), **data})
         return out
 
     # -------------------------------------------------- passages + search
@@ -331,11 +348,14 @@ class SecSource:
         return [{"section": s, "text": c} for s, t in found for c in chunk(t)]
 
     def passages(self, symbol: str, as_of: date) -> list[dict[str, Any]]:
+        return self._memoized("passages", symbol, as_of, lambda: self._passages(symbol, as_of))
+
+    def _passages(self, symbol: str, as_of: date) -> list[dict[str, Any]]:
         out = []
         for form in ("10-K", "10-Q"):
             for f in self.filings(symbol, form, as_of):
                 for p in self._cached(symbol, f, "passages", lambda f=f: self._sections(f)):
-                    out.append({**self._meta(f), **p})
+                    out.append({**self._meta(symbol, f), **p})
         for n in self.news(symbol, as_of):
             for c in chunk(n["text"]):
                 out.append({**{k: n[k] for k in ("form", "filed", "period", "accession", "url")},
