@@ -148,6 +148,33 @@ fundamentals only count filings filed by `as_of`. The default `synthetic`
 source is a deterministic random walk for offline development and is flagged
 `synthetic_data` in every packet.
 
+### Measure the committee
+
+```bash
+# run the whole pipeline on many stocks: rounds to a decision, conclusion rate,
+# team reports (and failures), amendments, vote changes, time per stock
+.venv/bin/qfii --config configs/outshift-lab.toml eval --symbols AAPL MSFT NVDA
+# re-count saved debates under other rules (no LLM calls): what-if table
+.venv/bin/qfii --config configs/outshift-lab.toml eval --replay-last 11
+```
+
+Each run writes `data/eval/<time>/report.md`, `summary.json` and `papers.jsonl`.
+Measured in the Outshift lab (gpt-6-luna, 11 large caps, 20-round limit):
+
+| committee rules | reached a decision | avg rounds to decision | avg rounds per stock | time per stock |
+|---|---|---|---|---|
+| default (a pass needs all 3) | 6 of 11 | 7.3 | 13.1 | 84–347 s |
+| `majority_pass_after_unchanged_rounds = 3` | 11 of 11 | 5.5 | 5.5 | 66–183 s |
+
+Every stalled debate under the default was the same: two members voting pass
+and one lone holdout repeating its ballot until round 20. With the stalemate
+rule a frozen 2-of-3 pass closes the paper after 3 unchanged rounds; the
+holdout is told so and can still negotiate. Both NVDA and META were still
+negotiated into an invest (amendments, rounds 9 and 10), and no stock that
+reached a decision in the first run changed direction. The rule is off by
+default; `pass_rule = "majority"` is the blunter option (replays show it would
+also have closed NVDA and META as passes in round 2).
+
 ## Layout
 
 ```
