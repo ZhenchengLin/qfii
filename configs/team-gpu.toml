@@ -25,6 +25,7 @@ num_ctx = 24576
 think = true             # R1 always reasons; Ollama returns it separately
 temperature = 0.6        # DeepSeek's recommended setting for R1 distills
 merge_system_prompt = true
+json_schema = false      # R1 thinking + schema -> Ollama HTTP 500 (measured)
 max_output_tokens = 6144
 
 [models.strongest]

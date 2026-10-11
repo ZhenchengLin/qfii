@@ -225,8 +225,9 @@ class OpenAICompatLLM(_Priced):
 class ScheduledLLM:
     """Routes every call through the per-loop one-model-at-a-time scheduler."""
 
-    def __init__(self, inner: Any, settings: SchedulerSettings):
+    def __init__(self, inner: Any, settings: SchedulerSettings, json_schema: bool = True):
         self.inner = inner
+        self.json_schema = json_schema
         self.settings = settings
         self.provider = inner.provider
         self.model = inner.model
@@ -237,6 +238,7 @@ class ScheduledLLM:
         sched = scheduler_for_loop(self.settings)
         if hasattr(self.inner, "unload"):
             sched.register_unloader(self.key, lambda _key: self.inner.unload())
+        schema = schema if self.json_schema else None
         return await sched.run(self.key, lambda: self.inner.complete(system, user, schema))
 
     def __getattr__(self, name: str) -> Any:  # prompts, usd_per_m_*, etc.
@@ -271,7 +273,8 @@ def build_llm(spec: ModelSpec, fake_responder: Callable[[str, str], str]) -> Any
 
 
 def make_llm(cfg: Config, agent: str, fake_responder: Callable[[str, str], str]) -> LLM:
-    return ScheduledLLM(build_llm(cfg.model_for(agent), fake_responder), cfg.scheduler)
+    spec = cfg.model_for(agent)
+    return ScheduledLLM(build_llm(spec, fake_responder), cfg.scheduler, spec.json_schema)
 
 
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL)

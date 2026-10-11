@@ -98,8 +98,12 @@ class DebateResult:
         return self.final.size_usd if self.final else None
 
 
-def _rules(rules: Committee) -> dict[str, Any]:
+def _rules(rules: Committee, portfolio: dict[str, Any] | None = None) -> dict[str, Any]:
+    from ..portfolio import max_new_order_usd
+
+    cap = max_new_order_usd(portfolio) if portfolio else None
     return {
+        "largest_allowed_order_usd": cap,
         "trade_rule": rules.invest_rule, "procedural_rule": rules.procedural_rule,
         "size_tolerance_pct": rules.size_tolerance_pct, "max_rounds": rules.max_rounds,
         "no_consensus_after_max_rounds": "paper is shelved; committee moves on",
@@ -141,7 +145,8 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
     for r in range(1, rules.max_rounds + 1):
         transcript = [_transcript_entry(rec) for rec in rounds]
         views = [DebateView(m.name, r, rules.max_rounds, dossier, list(reports), transcript,
-                            list(memories.get(m.name, [])), _rules(rules)) for m in members]
+                            list(memories.get(m.name, [])), _rules(rules, dossier.portfolio))
+                 for m in members]
         ballots = list(await asyncio.gather(*(_ballot(m, v) for m, v in zip(members, views))))
         outcome = tally(ballots, rules)
         rec = RoundRecord(r, ballots, outcome)

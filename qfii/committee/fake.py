@@ -17,10 +17,9 @@ _HOLDOUT = {1: 1.0, 2: 0.5}
 
 
 def _max_order(portfolio: dict) -> float:
-    lim = portfolio["limits"]
-    equity = portfolio["equity_usd"]
-    free_cash = portfolio["cash_usd"] - equity * lim["min_cash_pct"] / 100
-    return max(0.0, min(lim["max_order_usd"], equity * lim["max_position_pct"] / 100, free_cash))
+    from ..portfolio import max_new_order_usd
+
+    return max_new_order_usd(portfolio)
 
 
 def fake_member_responder(member: str) -> Callable[[str, str], str]:

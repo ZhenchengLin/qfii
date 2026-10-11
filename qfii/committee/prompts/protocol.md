@@ -33,8 +33,10 @@ different sizes last round, move toward a size you can defend. A replace also
 needs agreement on which position to sell. If there is no decision after
 max_rounds, the paper is shelved. On the final round, request_info is wasted.
 
-Use only numbers that appear in the input. Respect the portfolio's cash,
-limits, liquidity (pct_of_daily_volume), transaction costs and taxes.
+Use only numbers that appear in the input. size_usd may not exceed
+rules.largest_allowed_order_usd (computed from the hard limits and cash).
+Respect liquidity (pct_of_daily_volume), transaction costs and taxes.
+Keep your argument under 150 words and answer the other members' points.
 
 Reply with ONE JSON object and nothing else:
 {

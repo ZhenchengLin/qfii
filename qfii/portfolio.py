@@ -76,3 +76,13 @@ def snapshot(conn: sqlite3.Connection, cfg: Config, as_of: date) -> PortfolioSna
                   "income_provided": tax.income_usd is not None,
                   "profile_set": profile is not None},
     )
+
+
+def max_new_order_usd(snap: PortfolioSnapshot | dict) -> float:
+    """Largest buy the hard limits allow right now: max order size, max position
+    weight, and cash above the minimum reserve. Code computes it; agents see it."""
+    s = snap if isinstance(snap, dict) else snap.model_dump()
+    lim, equity = s["limits"], s["equity_usd"]
+    free_cash = s["cash_usd"] - equity * lim["min_cash_pct"] / 100
+    return round(max(0.0, min(lim["max_order_usd"], equity * lim["max_position_pct"] / 100,
+                              free_cash)), 2)

@@ -41,6 +41,7 @@ class ModelSpec:
     merge_system_prompt: bool = False
     timeout_s: float = 600.0
     max_output_tokens: int = 4096
+    json_schema: bool = True
 
 
 @dataclass(frozen=True)
@@ -176,7 +177,7 @@ def _build(raw: dict[str, Any]) -> Config:
         if spec["provider"] == "openai_compat" and not spec["base_url"]:
             raise ConfigError(f"models.{tier}.base_url is required for openai_compat")
         where = f"models.{tier}"
-        for flag in ("think", "merge_system_prompt"):
+        for flag in ("think", "merge_system_prompt", "json_schema"):
             if not isinstance(spec[flag], bool):
                 raise ConfigError(f"{where}.{flag} must be true or false")
         models[tier] = ModelSpec(
@@ -189,6 +190,7 @@ def _build(raw: dict[str, Any]) -> Config:
             spec["merge_system_prompt"],
             float(_number(spec, "timeout_s", where, lo=1)),
             int(_number(spec, "max_output_tokens", where, lo=16, integer=True)),
+            spec["json_schema"],
         )
 
     agents = {}

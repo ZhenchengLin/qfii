@@ -225,3 +225,25 @@ async def test_risk_is_not_commissioned_until_the_committee_asks():
     assert teams.asked[0][0] == "risk"
     assert members[0].views[1].info_reports[0]["team"] == "risk"
     assert result.outcome == "invest"
+
+
+async def test_size_above_hard_limits_is_rejected_and_retried():
+    """Live run: R1 14B proposed $15,000 when the limits allowed $10,000."""
+    replies = iter([json.dumps({"action": "invest", "size_usd": 15000, "argument": "big"}),
+                    json.dumps({"action": "invest", "size_usd": 9000, "argument": "ok"})])
+    llm = FakeLLM(lambda s, u: next(replies))
+    member = LLMMember("neutral", llm)
+    nine = {"action": "invest", "size_usd": 9000}
+    others = [Scripted("aggressive", nine), Scripted("conservative", nine)]
+    result = await run_debate(dossier(), [member, *others], Teams(), RULES)
+    assert '"largest_allowed_order_usd":10000' in llm.prompts[0][1]
+    assert "exceeds largest_allowed_order_usd 10,000" in llm.prompts[1][1]
+    assert [c["ok"] for c in member.calls] == [False, True]
+    assert (result.outcome, result.size_usd) == ("invest", 9000)
+
+
+def test_max_new_order():
+    from qfii.portfolio import max_new_order_usd
+    snap = {"cash_usd": 25000, "equity_usd": 100000,
+            "limits": {"max_order_usd": 10000, "max_position_pct": 10, "min_cash_pct": 20}}
+    assert max_new_order_usd(snap) == 5000  # only $5k above the 20% cash floor

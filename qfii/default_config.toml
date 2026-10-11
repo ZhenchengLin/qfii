@@ -13,6 +13,9 @@ db = "data/qfii.db"
 #   than silently truncated. think: let reasoning models think first (the
 #   thinking is kept out of the parsed answer). merge_system_prompt: put the
 #   system prompt in the user turn (recommended for DeepSeek-R1 distills).
+# json_schema: send the reply's JSON schema for constrained decoding. Turn off
+#   for DeepSeek-R1 on Ollama (thinking + schema makes Ollama return HTTP 500);
+#   replies are validated in code either way.
 # max_output_tokens: cap on generated tokens INCLUDING thinking. A reply that
 #   hits it is invalid and retried once, instead of thinking until a timeout.
 # usd_per_m_input / usd_per_m_output: price per million tokens, for budgets.
@@ -30,6 +33,7 @@ temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
 max_output_tokens = 4096
+json_schema = true
 
 [models.strong]
 provider = "fake"
@@ -44,6 +48,7 @@ temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
 max_output_tokens = 4096
+json_schema = true
 
 [models.strongest]
 provider = "fake"
@@ -58,6 +63,7 @@ temperature = 0.0
 merge_system_prompt = false
 timeout_s = 600.0
 max_output_tokens = 4096
+json_schema = true
 
 # One LLM per team. daily_budget_usd caps spend per agent per day.
 [agents.research]

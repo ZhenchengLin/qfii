@@ -65,7 +65,12 @@ class LLMMember:
             try:
                 data = parse_json_object(result.text)
                 data["member"] = self.name  # a member cannot vote as someone else
-                return Ballot.model_validate(data)
+                ballot = Ballot.model_validate(data)
+                cap = view.rules.get("largest_allowed_order_usd")
+                if cap is not None and ballot.size_usd and ballot.size_usd > cap:
+                    raise ValueError(f"size_usd {ballot.size_usd:,.0f} exceeds "
+                                     f"largest_allowed_order_usd {cap:,.0f}")
+                return ballot
             except (ValueError, ValidationError) as exc:
                 call.update(ok=False, error=f"invalid ballot: {exc}"[:500])
                 feedback = str(exc)[:500]
