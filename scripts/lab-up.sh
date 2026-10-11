@@ -5,9 +5,14 @@
 # The website shows the week replay (configs/week.toml); QFII_CONFIG overrides it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# pull first, then run the updated copy of this script (bash keeps reading the
+# old file otherwise)
+if [ -z "${QFII_LABUP_PULLED:-}" ]; then
+  git pull -q
+  QFII_LABUP_PULLED=1 exec bash "$0" "$@"
+fi
 CFG="${QFII_CONFIG:-configs/week.toml}"
 pkill -f "ui --host 127.0.0.1 --port 3000" 2>/dev/null || true
-git pull -q
 # SEC identity and other local settings live in .env.local (gitignored)
 [ -f .env.local ] && { set -a; . ./.env.local; set +a; }
 [ -d .venv ] || { uv python install 3.12 -q && uv venv -q -p 3.12 .venv; }
