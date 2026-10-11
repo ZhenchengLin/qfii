@@ -7,6 +7,8 @@
 
 [data]
 source = "csv"
+# set in the lab's .env.local (not in git): SEC_USER_AGENT="Qfii you@example.com"
+sec_user_agent = "env:SEC_USER_AGENT"
 
 [models.mid]
 provider = "openai_compat"

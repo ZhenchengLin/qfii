@@ -81,6 +81,14 @@ For the demo, the GPU setup is needed: ~30 min per stock is too slow to show liv
 | Committee can vote to hold a cash reserve | next |
 | Committee can vote to adjust a held position when new events arrive (EPS miss, Fed rate move) | next, with execution |
 
+## Ben's review, 2026-10-11
+
+| Concern | What changed |
+|---|---|
+| Research lacks fundamentals and news | EdgarTools (XBRL 10-K/10-Q statements, 8-K events) + Docling (press releases) as MCP tools; BM25 search over risk factors, MD&A and press releases; point in time by filing date |
+| Risk & Validation "did no research" (`input_value=[]`) | Lab data showed it did; our validator rejected uncited missing-data findings and long answers. `data_gap` items are now allowed. Risk uses the same tools and searches filings with the committee's questions |
+| Members may agree just to beat the 3-round limit | Members no longer see the round count or a final-round flag; the prompt says no consensus is legitimate; a changed vote must state what changed it (code-enforced). Open: A/B test hidden vs visible limit |
+
 ## Cisco track fit
 
 | Level | Qfii |

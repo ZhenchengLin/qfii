@@ -7,3 +7,4 @@ data/
 *.db
 config.local.toml
 .DS_Store
+.env.local

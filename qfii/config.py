@@ -90,6 +90,8 @@ class Config:
     fundamentals_dir: Path
     macro_series: tuple[str, ...]
     sec_user_agent: str
+    sec_cache_dir: Path
+    news_lookback_days: int
     mcp_url: str
     batch_size: int
     queue_cap: int
@@ -104,6 +106,16 @@ class Config:
 
     def model_for(self, agent: str) -> ModelSpec:
         return self.models[self.agents[agent].tier]
+
+    @property
+    def sec_identity(self) -> str:
+        """data.sec_user_agent, resolving "env:NAME"; empty if unset."""
+        import os
+
+        value = self.sec_user_agent
+        if value.startswith("env:"):
+            return os.environ.get(value[4:], "")
+        return value
 
 
 def _defaults() -> dict[str, Any]:
@@ -244,6 +256,9 @@ def _build(raw: dict[str, Any]) -> Config:
         fundamentals_dir=Path(raw["data"]["fundamentals_dir"]),
         macro_series=tuple(raw["data"]["macro_series"]),
         sec_user_agent=raw["data"]["sec_user_agent"],
+        sec_cache_dir=Path(raw["data"]["sec_cache_dir"]),
+        news_lookback_days=int(_number(raw["data"], "news_lookback_days", "data", lo=1,
+                                       hi=3650, integer=True)),
         mcp_url=raw["tools"]["mcp_url"],
         batch_size=int(_number(raw["research"], "batch_size", "research", lo=1, integer=True)),
         queue_cap=int(_number(raw["research"], "queue_cap", "research", lo=1, integer=True)),

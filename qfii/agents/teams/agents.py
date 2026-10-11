@@ -30,9 +30,15 @@ def _portfolio_view(portfolio: dict[str, Any]) -> dict[str, Any]:
 
 def fetchable_sources(cfg: Config, symbol: str) -> dict[str, bool]:
     """What Research can actually obtain, so Assessment only asks for fetchable evidence."""
-    fundamentals = bool(cfg.sec_user_agent) or (cfg.fundamentals_dir / f"{symbol}.json").exists()
+    try:
+        import edgar  # noqa: F401
+        sec = bool(cfg.sec_identity)
+    except ImportError:
+        sec = False
+    fundamentals = sec or (cfg.fundamentals_dir / f"{symbol}.json").exists()
     return {"prices_and_technicals": True, "benchmark_comparison": True, "macro": True,
-            "fundamentals": fundamentals, "news": False}
+            "fundamentals": fundamentals, "news_8k_filings": sec,
+            "filing_text_search": sec, "market_news_headlines": False}
 
 
 class AssessmentAgent:
@@ -113,8 +119,12 @@ class RiskAgent:
 
     async def review(self, packet: EvidencePacket, portfolio: dict[str, Any],
                      proposal: Proposal, questions: list[str]) -> RiskReport:
+        from ..evidence import DEFAULT_FILING_QUERIES
+
+        queries = [q.split("] ", 1)[-1][:300] for q in questions] + list(DEFAULT_FILING_QUERIES)
         async with ToolBox(self.cfg) as tools:
-            got = await collect_evidence(tools, packet.symbol, packet.as_of)
+            got = await collect_evidence(tools, packet.symbol, packet.as_of, queries,
+                                         per_query=3)
         impact_facts(got, proposal, portfolio, packet.as_of)
         self.evidence = got.evidence
         known = {e.id for e in packet.evidence} | {e.id for e in got.evidence}

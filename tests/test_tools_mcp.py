@@ -8,7 +8,8 @@ async def test_tools_listed_and_callable_over_mcp(cfg):
     async with ToolBox(cfg) as tools:
         assert set(await tools.list()) == {
             "get_price_history", "compute_indicators", "check_data_quality",
-            "compare_to_benchmark", "get_macro_snapshot", "get_fundamentals"}
+            "compare_to_benchmark", "get_macro_snapshot", "get_fundamentals",
+            "get_sec_fundamentals", "get_sec_news", "search_sec_filings"}
         ind = await tools.call("compute_indicators", symbol="aapl", as_of=AS_OF)
         assert ind["symbol"] == "AAPL" and ind["last_date"] <= AS_OF
         assert set(ind["indicators"]) >= {"rsi_14", "sma_200", "volatility_3m_ann"}
@@ -24,3 +25,11 @@ async def test_tool_error_surfaces(cfg):
     async with ToolBox(cfg) as tools:
         with pytest.raises(ToolError):
             await tools.call("compute_indicators", symbol="AAPL", as_of="not-a-date")
+
+
+async def test_sec_tools_report_unavailable_without_identity(cfg):
+    async with ToolBox(cfg) as tools:
+        res = await tools.call("get_sec_fundamentals", symbol="MSFT", as_of=AS_OF)
+        assert res["available"] is False and "sec_user_agent" in res["reason"]
+        assert (await tools.call("search_sec_filings", symbol="MSFT", as_of=AS_OF,
+                                 query="risk"))["hits"] == []

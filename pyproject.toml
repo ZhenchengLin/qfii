@@ -18,6 +18,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-asyncio>=0.23", "ruff>=0.4"]
+# SEC fundamentals, 8-K news and filing search (needs data.sec_user_agent)
+sec = ["edgartools>=5.6"]
+# better press-release/table parsing; pulls torch (use the CPU wheel on servers)
+docling = ["docling>=2.100"]
 
 [project.scripts]
 qfii = "qfii.cli:main"

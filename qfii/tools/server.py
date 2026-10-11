@@ -15,7 +15,21 @@ from .market import DataError, load_prices
 from .quality import quality_flags
 
 
+def _sec(cfg: Config, cache: dict):
+    """One SecSource per tool server; None (with the reason) if not configured."""
+    from .sec import SecSource, SecUnavailable
+
+    if "source" not in cache:
+        try:
+            cache["source"] = SecSource(cfg.sec_identity, cfg.sec_cache_dir,
+                                        news_lookback_days=cfg.news_lookback_days)
+        except SecUnavailable as exc:
+            cache["source"], cache["reason"] = None, str(exc)
+    return cache["source"], cache.get("reason")
+
+
 def build_tool_server(cfg: Config) -> MCPServer:
+    sec_cache: dict = {}
     server = MCPServer(
         "qfii-tools",
         instructions="Market data, technical indicators, benchmark comparison, macro "
@@ -86,5 +100,49 @@ def build_tool_server(cfg: Config) -> MCPServer:
                     "reason": str(exc)}
         out = fundamentals(facts, date.fromisoformat(as_of))
         return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR", **out}
+
+    @server.tool()
+    def get_sec_fundamentals(symbol: str, as_of: str) -> dict:
+        """XBRL financials from the latest 10-K and 10-Q filed on or before as_of:
+        revenue, net and operating income, cash flow, balance sheet, growth, margins."""
+        src, reason = _sec(cfg, sec_cache)
+        if src is None:
+            return {"symbol": symbol.upper(), "available": False, "reason": reason}
+        try:
+            out = src.fundamentals(symbol.upper(), date.fromisoformat(as_of))
+        except Exception as exc:  # noqa: BLE001 - SEC/network errors become a data gap
+            return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300]}
+        return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR (XBRL)", **out}
+
+    @server.tool()
+    def get_sec_news(symbol: str, as_of: str) -> dict:
+        """Recent 8-K current reports filed on or before as_of: event items (earnings,
+        executive changes, restructuring...) and the press release text."""
+        src, reason = _sec(cfg, sec_cache)
+        if src is None:
+            return {"symbol": symbol.upper(), "available": False, "reason": reason, "news": []}
+        try:
+            news = src.news(symbol.upper(), date.fromisoformat(as_of))
+        except Exception as exc:  # noqa: BLE001
+            return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300],
+                    "news": []}
+        for n in news:
+            n["text"] = n["text"][:3000]
+        return {"symbol": symbol.upper(), "as_of": as_of, "available": True, "news": news}
+
+    @server.tool()
+    def search_sec_filings(symbol: str, as_of: str, query: str, k: int = 4) -> dict:
+        """Most relevant passages for `query` from the 10-K risk factors and MD&A, the
+        10-Q MD&A, and recent 8-K press releases filed on or before as_of."""
+        src, reason = _sec(cfg, sec_cache)
+        if src is None:
+            return {"symbol": symbol.upper(), "available": False, "reason": reason, "hits": []}
+        try:
+            hits = src.search(symbol.upper(), date.fromisoformat(as_of), query, k)
+        except Exception as exc:  # noqa: BLE001
+            return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300],
+                    "hits": []}
+        return {"symbol": symbol.upper(), "as_of": as_of, "query": query, "available": True,
+                "hits": hits}
 
     return server

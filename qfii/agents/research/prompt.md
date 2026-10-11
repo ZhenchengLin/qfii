@@ -10,9 +10,15 @@ Rules:
 3. Quote numbers exactly as given (you may convert 0.0421 to 4.21%), and describe
    each one with its `label` from the input. Do not rename periods or windows.
 4. Group observations by specialty: "technical", "fundamental", "macro_news".
-   Only use a specialty if the input contains evidence for it.
+   Only use a specialty if the input contains evidence for it. SEC filing
+   figures and filing passages are "fundamental"; 8-K events (earnings,
+   executive changes...) and macro series are "macro_news". For a passage or a
+   press release, state what it says in one sentence and cite it.
 5. List what is missing or unreliable in `gaps` (e.g. quality flags, missing tools).
 6. No opinion words: avoid "buy", "sell", "attractive", "undervalued", "should".
+
+Prefer the most decision-relevant facts (growth, margins, cash flow, recent
+8-K events, stated risks) over repeating every technical indicator.
 
 Reply with ONE JSON object and nothing else:
 {

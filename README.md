@@ -47,6 +47,22 @@ Assessment proposal, every member's ballot and argument as it is cast, team
 reports (Risk findings by severity, checked assumptions), and the outcome.
 Past debates are listed on the left.
 
+### SEC fundamentals, 8-K news and filing search
+
+`pip install -e '.[sec]'` (EdgarTools; add `docling` for better press-release and
+table parsing) and set a contact identity, which the SEC requires:
+
+```bash
+echo 'SEC_USER_AGENT="Qfii you@example.com"' > .env.local     # gitignored
+set -a; . ./.env.local; set +a
+```
+
+with `sec_user_agent = "env:SEC_USER_AGENT"` under `[data]` in your config.
+Research then adds XBRL financials from the latest 10-K and 10-Q (growth,
+margins, cash flow), recent 8-K events with their press releases, and passages
+from the 10-K risk factors and MD&A. Risk & Validation searches the same filings
+with the committee's questions. Only filings filed by `as_of` are used.
+
 ### In the Outshift AGNTCY lab (hosted model, no GPU)
 
 The lab provides `LLM_MODEL` / `LLM_BASE_URL` / `LLM_API_KEY` (a LiteLLM proxy;

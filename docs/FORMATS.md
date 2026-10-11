@@ -63,6 +63,11 @@ Every message format is a Pydantic model in `qfii/contracts.py`. `qfii schemas` 
 | `liquidity` | text |
 | `portfolio_impact` | weight after the trade, cash left, tax |
 
+**Data gaps (2026-10-11):** a claim, finding or assumption check may set
+`data_gap: true` instead of citing evidence when it is about missing data
+("no news coverage"). Before this, 4 of 5 live Risk reports were discarded for
+having uncited missing-data findings. Every other claim must still cite.
+
 **Decided (Ben, 2026-10-10): the committee always decides.** A `blocking`
 finding is the strongest kind of objection, not a veto. Members who vote to
 invest past one must say why in their argument. Hard limits (order size, cash,

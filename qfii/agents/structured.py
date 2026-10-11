@@ -34,6 +34,11 @@ def fact_rows(evidence: list[EvidenceItem]) -> list[dict[str, Any]]:
         if ev.kind == "price":
             rows.append({"id": ev.id, "label": f"last close on {p.get('last_date')}",
                          "value": p.get("last_close")})
+        elif ev.kind == "news":
+            rows.append({"id": ev.id, "label": p.get("label"), "value": p.get("headline"),
+                         "excerpt": (p.get("text") or "")[:700]})
+        elif p.get("name") == "filing_passage":
+            rows.append({"id": ev.id, "label": p.get("label"), "value": p.get("text", "")[:900]})
         elif ev.kind == "macro":
             rows.append({"id": ev.id, "label": p.get("label") or p.get("series"),
                          "value": p.get("value"), "date": p.get("observation_date"),

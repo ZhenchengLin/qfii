@@ -110,8 +110,10 @@ symbols = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM", "JNJ",
 # Market data. "synthetic" = deterministic offline series (for development);
 # "csv" = <csv_dir>/<SYMBOL>.csv with columns date,close,volume, filled by
 # `qfii data fetch` (Yahoo prices, FRED macro, SEC fundamentals).
-# sec_user_agent: SEC requires a contact, e.g. "Qfii research you@example.com";
-# fundamentals are skipped while it is empty.
+# sec_user_agent: SEC requires a contact, e.g. "Qfii research you@example.com"
+#   (or "env:SEC_USER_AGENT"); SEC fundamentals, 8-K news and filing search
+#   (EdgarTools, `pip install qfii[sec]`) are off while it is empty.
+# news_lookback_days: how far back 8-K current reports count as news.
 [data]
 source = "synthetic"
 csv_dir = "data/prices"
@@ -119,6 +121,8 @@ macro_dir = "data/macro"
 fundamentals_dir = "data/fundamentals"
 macro_series = ["DGS10", "DGS2", "T10Y2Y", "DFF", "CPIAUCSL", "UNRATE", "BAMLH0A0HYM2", "VIXCLS"]
 sec_user_agent = ""
+sec_cache_dir = "data/sec"
+news_lookback_days = 120
 
 # Tools are served over MCP. Empty mcp_url = run the tool server in-process;
 # otherwise e.g. "http://127.0.0.1:9100/mcp" for `qfii serve tools`.

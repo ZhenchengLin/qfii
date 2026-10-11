@@ -29,20 +29,40 @@ class Collected:
         ev = EvidenceItem.make(symbol=symbol, kind=kind, source=source, as_of=as_of,
                                retrieved_at=retrieved, payload=payload, params=params)
         self.evidence.append(ev)
-        label = LABELS.get(name) or extra.pop("label", None) or name.replace("_", " ")
+        label = (LABELS.get(name) or extra.pop("label", None) or payload.get("label")
+                 or name.replace("_", " "))
         self.facts.append({"evidence_id": ev.id, "specialty": specialty, "name": name,
                            "label": label, "value": value, **extra})
         return ev
 
 
-async def collect_evidence(tools: ToolBox, sym: str, as_of: str) -> Collected:
+# Filing searches Research always runs; Risk & Validation adds the committee's questions.
+DEFAULT_FILING_QUERIES = (
+    "revenue growth demand outlook guidance",
+    "competition regulation material risks",
+    "liquidity debt cash capital expenditures",
+)
+
+
+async def collect_evidence(tools: ToolBox, sym: str, as_of: str,
+                           queries: tuple[str, ...] | list[str] = DEFAULT_FILING_QUERIES,
+                           per_query: int = 2) -> Collected:
     out = Collected()
     quality = await tools.call("check_data_quality", symbol=sym, as_of=as_of)
     ind = await tools.call("compute_indicators", symbol=sym, as_of=as_of)
     hist = await tools.call("get_price_history", symbol=sym, as_of=as_of)
     bench = await tools.call("compare_to_benchmark", symbol=sym, as_of=as_of)
     macro = await tools.call("get_macro_snapshot", as_of=as_of)
-    fund = await tools.call("get_fundamentals", symbol=sym, as_of=as_of)
+    sec_fund = await tools.call("get_sec_fundamentals", symbol=sym, as_of=as_of)
+    fund = (sec_fund if sec_fund.get("available")
+            else await tools.call("get_fundamentals", symbol=sym, as_of=as_of))
+    news = await tools.call("get_sec_news", symbol=sym, as_of=as_of)
+    hits: dict[str, dict] = {}
+    for q in queries:
+        res = await tools.call("search_sec_filings", symbol=sym, as_of=as_of, query=q,
+                               k=per_query)
+        for h in res.get("hits", []):
+            hits.setdefault(h["text"], {**h, "query": q})
 
     retrieved = datetime.now(UTC).isoformat(timespec="seconds")
     out.flags = list(quality["flags"])
@@ -84,8 +104,26 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str) -> Collected:
         flags.append("no_benchmark")
         gaps.append(f"no overlapping history with benchmark {bench['benchmark']}")
 
-    # fundamental: SEC filings public by as_of
-    if fund.get("available"):
+    # fundamental: SEC filings public by as_of (EdgarTools XBRL first, companyfacts fallback)
+    if fund is sec_fund:
+        for key in ("annual", "quarterly"):
+            block = fund.get(key)
+            if not block:
+                continue
+            for name, value in block["metrics"].items():
+                if name == "periods" or value is None:
+                    continue
+                add("filing", f"mcp:get_sec_fundamentals/{block['form']}", "fundamental",
+                    f"{key}_{name}", value,
+                    {"name": f"{key}_{name}", "value": value, "form": block["form"],
+                     "filed": block["filed"], "period": block["period"], "url": block["url"],
+                     "label": f"{key} {name.replace('_', ' ')} ({block['form']} for period "
+                              f"ending {block['period']}, filed {block['filed']})"},
+                    period_end=block["period"], filed=block["filed"])
+        for name, value in fund["derived"].items():
+            add("calc", "mcp:get_sec_fundamentals/derived", "fundamental", name, value,
+                {"name": name, "value": value, "label": name.replace("_", " ")})
+    elif fund.get("available"):
         for name, m in fund["metrics"].items():
             add("filing", f"mcp:get_fundamentals/SEC EDGAR {m['form']}", "fundamental",
                 name, m["value"], {"name": name, **m}, period_end=m["period_end"],
@@ -107,6 +145,24 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str) -> Collected:
     if not available:
         flags.append("no_macro")
         gaps.append("macro data unavailable (run `qfii data fetch --macro`)")
-    flags.append("no_news")
-    gaps.append("news tools not connected")
+
+    # news: 8-K current reports (company-issued, primary source)
+    for n in news.get("news", []):
+        events = ", ".join(f"Item {i['code']} {i['label']}" for i in n["items"])
+        add("news", f"mcp:get_sec_news/8-K {n['filed']}", "macro_news", "8k_event",
+            n["headline"] or events,
+            {"name": "8k_event", "form": n["form"], "filed": n["filed"], "items": n["items"],
+             "headline": n["headline"], "text": n["text"][:3000], "url": n["url"],
+             "label": f"8-K filed {n['filed']}: {events}"})
+    if not news.get("available"):
+        flags.append("no_news")
+        gaps.append(f"news unavailable: {news.get('reason', 'not configured')}")
+
+    # filing passages relevant to the queries (risk factors, MD&A, press releases)
+    for h in hits.values():
+        add("filing", f"mcp:search_sec_filings/{h['form']} {h['filed']}", "fundamental",
+            "filing_passage", h["text"][:900],
+            {"name": "filing_passage", "form": h["form"], "filed": h["filed"],
+             "section": h["section"], "url": h["url"], "text": h["text"], "query": h["query"],
+             "label": f"{h['form']} {h['section']} (filed {h['filed']}), passage"})
     return out

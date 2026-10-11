@@ -121,7 +121,7 @@ async def test_send_back_limit_shelves(cfg, conn, monkeypatch):
 async def test_needs_evidence_queues_research_requests(cfg, conn, monkeypatch):
     def needs(system, user):
         data = json.loads(user)
-        assert data["research_can_fetch"]["news"] is False
+        assert data["research_can_fetch"]["market_news_headlines"] is False
         f = data["facts"][0]
         return json.dumps({"thesis": "?", "arguments": [{"claim": "x", "evidence_ids": [f["id"]]}],
                            "counterarguments": [{"claim": "y", "evidence_ids": [f["id"]]}],

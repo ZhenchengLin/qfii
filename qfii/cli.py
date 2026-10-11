@@ -207,12 +207,12 @@ def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
                     failures += 1
                     print(f"macro   {sid} FAILED: {exc}", file=sys.stderr)
         if every or args.fundamentals:
-            if not cfg.sec_user_agent:
+            if not cfg.sec_identity:
                 print("fundamentals skipped: set data.sec_user_agent (SEC requires a contact, "
                       'e.g. "Qfii research you@example.com")', file=sys.stderr)
             else:
                 try:
-                    ciks = fetch_sec_ciks(http, cfg.sec_user_agent)
+                    ciks = fetch_sec_ciks(http, cfg.sec_identity)
                 except FetchError as exc:
                     print(f"fundamentals FAILED: {exc}", file=sys.stderr)
                     return 1
@@ -221,7 +221,7 @@ def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
                         print(f"fundamentals {sym:<6} no SEC filer (ETF or foreign?), skipped")
                         continue
                     try:
-                        facts = fetch_company_facts(http, ciks[sym], cfg.sec_user_agent)
+                        facts = fetch_company_facts(http, ciks[sym], cfg.sec_identity)
                         write_facts(cfg.fundamentals_dir, sym, facts)
                         print(f"fundamentals {sym:<6} {facts.get('entityName')}")
                     except FetchError as exc:
