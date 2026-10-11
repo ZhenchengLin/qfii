@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qfii"
+version = "0.1.0"
+description = "Qfii: multi-agent research-to-allocation system on A2A + MCP + LangGraph (paper trading)"
+requires-python = ">=3.11"
+dependencies = [
+    "a2a-sdk[http-server]>=1.2,<2",
+    "mcp>=2.3,<3",
+    "langgraph>=1.2,<2",
+    "pydantic>=2.7,<3",
+    "httpx>=0.27",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "ruff>=0.4"]
+
+[project.scripts]
+qfii = "qfii.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["qfii*"]
+
+[tool.setuptools.package-data]
+qfii = ["default_config.toml", "schema.sql", "agents/*/prompt.md", "committee/prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,114 @@
+# Qfii defaults. Override any key in a local file passed with
+# --config (e.g. config.local.toml); unknown keys are rejected.
+
+[paths]
+db = "data/qfii.db"
+
+# Model tiers. provider "fake" uses the scripted FakeLLM (no API keys).
+# provider "openai_compat" calls any OpenAI-compatible /chat/completions
+# endpoint (NVIDIA NIM / Brev, Ollama, vLLM, OpenAI): set base_url, and the
+# NAME of the environment variable holding the key in api_key_env.
+[models.mid]
+provider = "fake"
+model = "fake-mid"
+base_url = ""
+api_key_env = ""
+
+[models.strong]
+provider = "fake"
+model = "fake-strong"
+base_url = ""
+api_key_env = ""
+
+[models.strongest]
+provider = "fake"
+model = "fake-strongest"
+base_url = ""
+api_key_env = ""
+
+# One LLM per team. daily_budget_usd caps spend per agent per day.
+[agents.research]
+tier = "mid"
+daily_budget_usd = 2.0
+
+[agents.assessment]
+tier = "strong"
+daily_budget_usd = 5.0
+
+[agents.risk]
+tier = "strong"
+daily_budget_usd = 5.0
+
+# Investment committee: three equal votes, no chair.
+# aggressive favours fundamental upside; conservative favours downside protection;
+# neutral weighs both against the S&P 500 and the whole portfolio, so it gets the
+# strongest model.
+[agents.aggressive]
+tier = "strong"
+daily_budget_usd = 5.0
+
+[agents.conservative]
+tier = "strong"
+daily_budget_usd = 5.0
+
+[agents.neutral]
+tier = "strongest"
+daily_budget_usd = 8.0
+
+[universe]
+symbols = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM", "JNJ", "PG"]
+
+# Market data. "synthetic" = deterministic offline series (for development);
+# "csv" = <csv_dir>/<SYMBOL>.csv with columns date,close,volume.
+[data]
+source = "synthetic"
+csv_dir = "data/prices"
+
+# Tools are served over MCP. Empty mcp_url = run the tool server in-process;
+# otherwise e.g. "http://127.0.0.1:9100/mcp" for `qfii serve tools`.
+[tools]
+mcp_url = ""
+
+[research]
+queue_cap = 50
+cache_ttl_hours = 24
+min_observations = 200
+stale_after_days = 5
+
+# Committee protocol. Each round every member writes an argument and casts one
+# equal-weight ballot: invest / replace / pass / request_info / send_back.
+#   invest_rule      votes needed to trade (invest, replace, pass): "unanimous"
+#                    or "majority" (2 of 3). Sizes must also agree: all proposed
+#                    sizes within size_tolerance_pct of each other; the median wins.
+#   procedural_rule  votes needed to request info or send back to a team.
+#   max_rounds       hard stop: no consensus by then -> shelve, move to next paper.
+#   max_send_backs   full revisions allowed per paper before it is shelved.
+#   memory_items     how many of its own memories each member sees per prompt.
+[committee]
+max_rounds = 3
+invest_rule = "unanimous"
+procedural_rule = "majority"
+size_tolerance_pct = 10.0
+max_send_backs = 1
+memory_items = 20
+
+# Portfolio economics the neutral member must account for. Placeholders until
+# Ben sets them.
+[portfolio]
+benchmark = "SPY"
+commission_bps = 0.0
+slippage_bps = 5.0
+short_term_tax_pct = 35.0
+long_term_tax_pct = 15.0
+long_term_after_days = 365
+
+# Hard limits. Enforced in code; no agent can override them.
+[limits]
+starting_cash_usd = 100000.0
+max_position_pct = 10.0
+max_order_usd = 10000.0
+min_cash_pct = 20.0
+daily_order_cap = 5
+
+[execution]
+mode = "paper"
