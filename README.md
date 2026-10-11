@@ -19,7 +19,7 @@ one), pass, request more info from a team, send the stock back for revision,
 propose an amended deal (size, stop-loss, holding period, conditions), or
 support an amendment already on the table; if all back the same amendment,
 its terms are the decision.
-Trades need consensus on the action and the size; after 5 rounds without one,
+Trades need consensus on the action and the size; after 20 rounds without one,
 the stock is shelved. Each member keeps its own private memory. Order execution
 is deterministic code. Watch a debate with `qfii debate NVDA --as-of 2026-10-09`.
 

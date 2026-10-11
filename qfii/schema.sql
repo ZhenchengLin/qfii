@@ -131,7 +131,7 @@ CREATE TABLE debates (
 CREATE TABLE ballots (
     id              INTEGER PRIMARY KEY,
     debate_id       INTEGER NOT NULL REFERENCES debates(id),
-    round           INTEGER NOT NULL CHECK (round BETWEEN 1 AND 10),
+    round           INTEGER NOT NULL CHECK (round BETWEEN 1 AND 50),
     member          TEXT NOT NULL CHECK (member IN ('aggressive', 'conservative', 'neutral')),
     action          TEXT NOT NULL CHECK (action IN ('invest', 'replace', 'pass', 'request_info',
                                                     'send_back', 'propose', 'support',

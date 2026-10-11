@@ -162,7 +162,7 @@ def _committee(raw: dict[str, Any]) -> Committee:
         raise ConfigError(f"committee.info_request_rule must be one of {INFO_REQUEST_RULES}")
     return Committee(
         info_request_rule=raw["info_request_rule"],
-        max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=10, integer=True)),
+        max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=50, integer=True)),
         invest_rule=raw["invest_rule"],
         procedural_rule=raw["procedural_rule"],
         size_tolerance_pct=float(_number(raw, "size_tolerance_pct", "committee", lo=0, hi=100)),

@@ -281,13 +281,24 @@ async def test_changing_a_vote_requires_a_reason():
     assert result.outcome == "pass"
 
 
-async def test_default_committee_debates_up_to_five_rounds():
+async def test_default_committee_debates_up_to_twenty_rounds(cfg):
+    from qfii.papers import create_paper, transition
+    from qfii.store import save_debate
+
     rules = load_config().committee
-    assert rules.max_rounds == 5
-    members = [Scripted("aggressive", *[INV] * 5), Scripted("conservative", *[PASS] * 5),
-               Scripted("neutral", *[INV] * 5)]
+    assert rules.max_rounds == 20
+    members = [Scripted("aggressive", *[INV] * 20), Scripted("conservative", *[PASS] * 20),
+               Scripted("neutral", *[INV] * 20)]
     result = await run_debate(dossier(), members, Teams(), rules)
-    assert result.outcome == "no_consensus" and len(result.rounds) == 5
+    assert result.outcome == "no_consensus" and len(result.rounds) == 20
+    conn = connect(cfg.db_path)            # rounds 11-20 must fit the ballots table too
+    init_db(conn, cfg.limits.starting_cash_usd)
+    with conn:
+        pid = create_paper(conn, "AAPL", "user", "research")
+        transition(conn, pid, "packet_ready", "research")
+        transition(conn, pid, "proposal", "assessment")
+    save_debate(conn, pid, "AAPL", result)
+    assert conn.execute("SELECT MAX(round) FROM ballots").fetchone()[0] == 20
 
 
 PROPOSE = {"action": "propose", "amendment": {"size_usd": 4000, "summary": "half size, 15% stop",
