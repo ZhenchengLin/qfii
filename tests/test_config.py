@@ -22,7 +22,7 @@ def test_defaults_load():
     assert cfg.agents["aggressive"].tier == cfg.agents["conservative"].tier == "strong"
     assert cfg.model_for("risk") == cfg.models["strong"]
     c = cfg.committee
-    assert (c.max_rounds, c.invest_rule, c.procedural_rule) == (3, "unanimous", "majority")
+    assert (c.max_rounds, c.invest_rule, c.procedural_rule) == (5, "unanimous", "majority")
     assert cfg.portfolio.benchmark == "SPY"
     assert cfg.data_source == "synthetic" and cfg.mcp_url == ""
 

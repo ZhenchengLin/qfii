@@ -151,7 +151,7 @@ stale_after_days = 5
 #   max_send_backs   full revisions allowed per paper before it is shelved.
 #   memory_items     how many of its own memories each member sees per prompt.
 [committee]
-max_rounds = 3
+max_rounds = 5
 invest_rule = "unanimous"
 procedural_rule = "majority"
 size_tolerance_pct = 10.0

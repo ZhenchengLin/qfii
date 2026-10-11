@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -14,7 +15,7 @@ from qfii.db import connect, init_db
 from qfii.llm import FakeLLM
 from qfii.portfolio import snapshot
 
-RULES = load_config().committee
+RULES = replace(load_config().committee, max_rounds=3)  # scripted 3-round cases
 AS_OF = date(2026, 10, 9)
 
 
@@ -277,3 +278,12 @@ async def test_changing_a_vote_requires_a_reason():
     final = result.rounds[1].ballots[0]
     assert final.action == "pass" and final.changed_because.startswith("risk report")
     assert result.outcome == "pass"
+
+
+async def test_default_committee_debates_up_to_five_rounds():
+    rules = load_config().committee
+    assert rules.max_rounds == 5
+    members = [Scripted("aggressive", *[INV] * 5), Scripted("conservative", *[PASS] * 5),
+               Scripted("neutral", *[INV] * 5)]
+    result = await run_debate(dossier(), members, Teams(), rules)
+    assert result.outcome == "no_consensus" and len(result.rounds) == 5

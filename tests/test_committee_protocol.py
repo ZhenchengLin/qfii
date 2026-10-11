@@ -6,7 +6,7 @@ from qfii.committee.protocol import sizes_agree, tally, votes_needed
 from qfii.config import load_config
 from qfii.contracts import Ballot
 
-RULES = load_config().committee  # unanimous trades, majority procedural, 10% size band
+RULES = replace(load_config().committee, max_rounds=3)  # scripted 3-round cases  # unanimous trades, majority procedural, 10% size band
 MAJORITY = replace(RULES, invest_rule="majority")
 
 
