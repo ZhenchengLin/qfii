@@ -18,6 +18,10 @@ fixed, so that is agreement on the size and terms. Procedural actions
 send_back needs `procedural_rule` votes; request_info needs `info_request_rule`
 ("any": one member's question is answered). Anything else: no
 decision this round.
+
+Stalemate (optional, `majority_pass_after_unchanged_rounds`): when a round would
+continue, every member has repeated the same ballot for that many rounds and a
+majority votes pass, the paper closes as a pass (see `resolve_stalemate`).
 """
 
 from __future__ import annotations
@@ -130,3 +134,18 @@ def tally(ballots: list[Ballot], rules: Committee,
     return RoundOutcome("continue", votes, detail="; ".join(blocked) or "no action reached "
                         f"its threshold (trade needs {trade_need}, pass needs {pass_need}, "
                         f"procedural needs {proc_need})")
+
+
+def resolve_stalemate(outcome: RoundOutcome, ballots: list[Ballot], rules: Committee,
+                      unchanged_rounds: int) -> RoundOutcome:
+    """unchanged_rounds: how many of the latest rounds (this one included) had
+    exactly the same ballots. Turns a frozen 2-of-3 pass into a pass."""
+    after = rules.majority_pass_after_unchanged_rounds
+    if not after or outcome.kind != "continue" or unchanged_rounds <= after:
+        return outcome
+    passes = sum(1 for b in ballots if b.action == "pass")
+    if passes < votes_needed("majority", len(ballots)):
+        return outcome
+    return RoundOutcome("pass", outcome.votes,
+                        detail=f"{passes} of {len(ballots)} pass and positions unchanged for "
+                               f"{after} rounds: majority pass closes the paper")

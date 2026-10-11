@@ -3,7 +3,7 @@
 from dataclasses import replace
 
 from qfii.committee.protocol import tally
-from qfii.committee.replay import replay_debate, replay_paper
+from qfii.committee.replay import outcome_kinds, replay_debate, replay_paper
 from qfii.config import load_config
 from qfii.contracts import Ballot
 
@@ -32,13 +32,7 @@ def rnd(*specs):
 
 
 def actual(rounds, rules=RULES):
-    amendments, kinds = {}, []
-    for ballots in rounds:
-        for b in ballots:
-            if b.action == "propose":
-                amendments[b.amendment_id] = b.amendment.model_dump(exclude_none=True)
-        kinds.append(tally(ballots, rules, amendments).kind)
-    return kinds
+    return outcome_kinds(rounds, rules)
 
 
 # The pattern seen live (MSFT, AMZN, GOOGL): a question, then 2 pass vs 1 invest
@@ -101,3 +95,32 @@ def test_replay_paper_follows_send_backs_and_sums_rounds():
 def test_replay_shorter_round_limit_cuts_the_debate():
     rep = replay_debate(HOLDOUT, actual(HOLDOUT), replace(RULES, max_rounds=5))
     assert (rep.outcome, rep.rounds) == ("no_consensus", 5)
+
+
+# ------------------------------------------------------------- stalemate majority pass
+
+def test_frozen_two_pass_closes_the_paper_after_n_unchanged_rounds():
+    rules = replace(RULES, majority_pass_after_unchanged_rounds=3)
+    rep = replay_debate(HOLDOUT, actual(HOLDOUT, rules), rules)
+    # rounds 2..5 identical: the streak passes 3 in round 5
+    assert (rep.outcome, rep.rounds, rep.exact) == ("pass", 5, True)
+
+
+def test_stalemate_rule_needs_a_pass_majority():
+    frozen = [rnd(("invest",), ("invest",), ("pass",)) for _ in range(10)]
+    rules = replace(RULES, majority_pass_after_unchanged_rounds=2)
+    assert replay_debate(frozen, actual(frozen, rules), rules).outcome == "no_consensus"
+
+
+def test_a_holdout_who_keeps_negotiating_is_not_cut_off():
+    # a new amendment each round: positions change, so the streak never builds
+    moving = [rnd(("propose", 5000 - 100 * i, f"A{i + 1}"), ("pass",), ("pass",))
+              for i in range(10)]
+    rules = replace(RULES, majority_pass_after_unchanged_rounds=2)
+    assert replay_debate(moving, actual(moving, rules), rules).outcome == "no_consensus"
+
+
+def test_stalemate_pass_comes_before_the_stalemate_stop():
+    rules = replace(RULES, majority_pass_after_unchanged_rounds=3,
+                    stop_after_unchanged_rounds=3)
+    assert replay_debate(HOLDOUT, actual(HOLDOUT, rules), rules).outcome == "pass"

@@ -181,7 +181,10 @@ async def test_replay_predicts_what_the_engine_does_under_other_rules(cfg, conn,
     assert run.outcome == "no_consensus" and len(run.debate.rounds) == 12
     rounds, kinds = from_records(run.debate.rounds)
     for change in ({"pass_rule": "majority"}, {"stop_after_unchanged_rounds": 3},
-                   {"stop_after_unchanged_rounds": 2, "pass_rule": "unanimous"}):
+                   {"stop_after_unchanged_rounds": 2, "pass_rule": "unanimous"},
+                   {"majority_pass_after_unchanged_rounds": 2},
+                   {"majority_pass_after_unchanged_rounds": 4,
+                    "stop_after_unchanged_rounds": 4}):
         rules = replace(base.committee, **change)
         predicted = replay_debate(rounds, kinds, rules)
         real = await run_paper(replace(base, committee=rules), conn, "NVDA", AS_OF, save=True)

@@ -68,6 +68,7 @@ class Committee:
     procedural_rule: str
     info_request_rule: str
     stop_after_unchanged_rounds: int
+    majority_pass_after_unchanged_rounds: int
     size_tolerance_pct: float
     max_send_backs: int
     memory_items: int
@@ -166,6 +167,8 @@ def _committee(raw: dict[str, Any]) -> Committee:
         info_request_rule=raw["info_request_rule"],
         stop_after_unchanged_rounds=int(_number(raw, "stop_after_unchanged_rounds", "committee",
                                                 lo=0, hi=50, integer=True)),
+        majority_pass_after_unchanged_rounds=int(_number(
+            raw, "majority_pass_after_unchanged_rounds", "committee", lo=0, hi=50, integer=True)),
         max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=50, integer=True)),
         invest_rule=raw["invest_rule"],
         pass_rule=raw["pass_rule"],

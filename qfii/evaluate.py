@@ -40,7 +40,8 @@ CONCLUDED = ("invest", "replace", "pass")
 WHAT_IF: dict[str, dict[str, Any]] = {
     "pass_by_majority": {"pass_rule": "majority"},
     "stop_after_3_unchanged": {"stop_after_unchanged_rounds": 3},
-    "pass_by_majority+stop_3": {"pass_rule": "majority", "stop_after_unchanged_rounds": 3},
+    "majority_pass_after_2_unchanged": {"majority_pass_after_unchanged_rounds": 2},
+    "majority_pass_after_3_unchanged": {"majority_pass_after_unchanged_rounds": 3},
 }
 
 

@@ -22,7 +22,7 @@ from typing import Any
 from ..config import Committee
 from ..contracts import Ballot
 from .engine import FINAL_OUTCOMES, _unchanged_streak
-from .protocol import tally
+from .protocol import resolve_stalemate, tally
 
 
 @dataclass
@@ -47,8 +47,9 @@ def replay_debate(rounds: list[list[Ballot]], actual: list[str], rules: Committe
         for b in ballots:
             if b.action == "propose" and b.amendment is not None and b.amendment_id:
                 amendments[b.amendment_id] = b.amendment.model_dump(exclude_none=True)
-        out = tally(ballots, rules, amendments)
         seen.append(_entry(ballots))
+        out = resolve_stalemate(tally(ballots, rules, amendments), ballots, rules,
+                                _unchanged_streak(seen))
         if out.kind in FINAL_OUTCOMES:
             return Replay(out.kind, i, True, out.size_usd, out.amendment_id)
         if out.kind != actual[i - 1]:
@@ -100,14 +101,22 @@ def load_debate(conn: sqlite3.Connection, debate_id: int, rules: Committee
         ballot.amendment_id = aid           # engine-assigned on propose
         by_round.setdefault(rnd, []).append(ballot)
     rounds = [by_round[r] for r in sorted(by_round)]
+    return rounds, outcome_kinds(rounds, rules)
+
+
+def outcome_kinds(rounds: list[list[Ballot]], rules: Committee) -> list[str]:
+    """Each round's outcome under `rules`, as the engine would have counted it."""
     amendments: dict[str, dict[str, Any]] = {}
-    actual = []
+    seen: list[dict[str, Any]] = []
+    kinds = []
     for ballots in rounds:
         for b in ballots:
             if b.action == "propose" and b.amendment is not None and b.amendment_id:
                 amendments[b.amendment_id] = b.amendment.model_dump(exclude_none=True)
-        actual.append(tally(ballots, rules, amendments).kind)
-    return rounds, actual
+        seen.append(_entry(ballots))
+        kinds.append(resolve_stalemate(tally(ballots, rules, amendments), ballots, rules,
+                                       _unchanged_streak(seen)).kind)
+    return kinds
 
 
 def load_paper(conn: sqlite3.Connection, paper_id: int, rules: Committee

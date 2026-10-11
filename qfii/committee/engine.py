@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from ..config import COMMITTEE, Committee
 from ..contracts import Ballot
-from .protocol import RoundOutcome, tally
+from .protocol import RoundOutcome, resolve_stalemate, tally
 
 FINAL_OUTCOMES = ("invest", "replace", "pass", "send_back")
 
@@ -110,6 +110,8 @@ def _rules(rules: Committee, portfolio: dict[str, Any] | None = None) -> dict[st
     return {
         "largest_allowed_order_usd": cap,
         "trade_rule": rules.invest_rule, "pass_rule": rules.pass_rule,
+        "majority_pass_after_unchanged_rounds":
+            rules.majority_pass_after_unchanged_rounds or None,
         "procedural_rule": rules.procedural_rule,
         "size_tolerance_pct": rules.size_tolerance_pct,
     }
@@ -193,6 +195,8 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
         outcome = tally(ballots, rules, amendments)
         rec = RoundRecord(r, ballots, outcome)
         rounds.append(rec)
+        rec.outcome = outcome = resolve_stalemate(
+            outcome, ballots, rules, _unchanged_streak([_transcript_entry(x) for x in rounds]))
 
         if outcome.kind == "request_info":   # answered even in the last round: the
                                              # report is printed for the viewers

@@ -38,7 +38,9 @@ Ballot actions (equal weight):
 
 A trade needs the number of votes in rules.trade_rule, and the sizes must be
 within rules.size_tolerance_pct of each other. Deciding not to invest needs the
-number of votes in rules.pass_rule. A replace also needs agreement
+number of votes in rules.pass_rule. If rules.majority_pass_after_unchanged_rounds
+is set and every member repeats the same ballot for that many rounds, a
+majority voting pass closes the paper: a lone holdout must negotiate before then. A replace also needs agreement
 on which position to sell. Backing the same amendment is agreement on its exact
 terms.
 
