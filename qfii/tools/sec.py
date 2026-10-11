@@ -152,6 +152,23 @@ def _period_columns(df) -> list[str]:
     return [c for c in df.columns if re.match(r"\d{4}-\d{2}-\d{2} \(", str(c))]
 
 
+def _diluted_eps(df, cols: list[str]) -> float | None:
+    """Diluted EPS for the latest period, matched by label (it often has no
+    standard concept). Per-class (dimensional) rows are skipped."""
+    if not cols or "label" not in df:
+        return None
+    labels = df["label"].astype(str)
+    rows = df[labels.str.contains("diluted", case=False)
+              & labels.str.contains(r"per share|\bEPS\b|earnings per", case=False)]
+    if "dimension" in rows:
+        rows = rows[~rows["dimension"].astype(bool)]
+    for _, row in rows.iterrows():
+        v = _num(row[cols[0]])
+        if v is not None and 0 < abs(v) < 10_000:
+            return v
+    return None
+
+
 class SecSource:
     """Reads SEC filings for one process. `company_factory(symbol)` must return an
     object with get_filings(form=...) like edgar.Company (tests pass fakes)."""
@@ -262,6 +279,15 @@ class SecSource:
                         out[f"{name}_prior_period"] = prior
                         out.setdefault(name, cur)
             out["periods"] = cols[:2]
+            eps = _diluted_eps(df, cols)
+            if eps is not None:
+                out["diluted_eps"] = eps
+                ni = out.get("net_income")
+                if "diluted_shares" not in out and ni and ni > 0 and eps > 0:
+                    # multi-class issuers (e.g. Alphabet A/B/C) report diluted shares
+                    # only per class; net income / diluted EPS is the total
+                    out["diluted_shares"] = round(ni / eps)
+                    out["diluted_shares_implied_from_eps"] = True
         except Exception as exc:  # noqa: BLE001 - growth is optional; keep the levels
             log.info("no prior-period statement for %s: %s", f.accession_no, exc)
         return out
@@ -277,7 +303,9 @@ class SecSource:
             if not found:
                 continue
             f = found[0]
-            metrics = self._cached(symbol, f, "metrics", lambda f=f: self._statement_metrics(f))
+            # v2: diluted EPS and implied diluted shares (older caches lack them)
+            metrics = self._cached(symbol, f, "metrics.v2",
+                                   lambda f=f: self._statement_metrics(f))
             result[key] = {**self._meta(symbol, f), "metrics": metrics}
             result["available"] = True
         result["entity"] = getattr(self.company(symbol), "name", symbol)

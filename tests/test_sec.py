@@ -83,7 +83,7 @@ def test_fundamentals_point_in_time(src):
 
 def test_results_are_cached_per_filing(src, tmp_path):
     src.fundamentals("EX", date(2026, 10, 9))
-    assert (tmp_path / "EX" / "k2.metrics.json").exists()
+    assert (tmp_path / "EX" / "k2.metrics.v2.json").exists()
 
 
 def test_news_window_and_exhibit_only_8ks(src):
@@ -153,3 +153,44 @@ def test_originals_preferred_over_amendments(tmp_path):
 
     src = SecSource("Qfii t@e.x", tmp_path, lambda s: Amended())
     assert src.fundamentals("EX", date(2026, 10, 9))["annual"]["accession"] == "k2"
+
+
+def test_multi_class_issuer_gets_diluted_shares_from_eps(tmp_path):
+    """Alphabet reports diluted shares only per share class: market cap and every
+    multiple went missing. Net income / diluted EPS recovers the total."""
+    pd = pytest.importorskip("pandas")
+    col = "2025-12-31 (FY)"
+    statement = pd.DataFrame({
+        "label": ["Revenues", "Net income", "Basic net income per share (in dollars per share)",
+                  "Diluted net income per share (in dollars per share)",
+                  "Diluted net income per share, Class C"],
+        "standard_concept": ["Revenue", "NetIncome", None, None, None],
+        "dimension": [False, False, False, False, True],
+        col: [402.8e9, 132.17e9, 10.91, 10.81, 99.0],
+        "2024-12-31 (FY)": [350.0e9, 100.1e9, 8.1, 8.0, 99.0],
+    })
+
+    class MultiClass(FakeFinancials):
+        def get_net_income(self): return 132.17e9
+        def income_statement(self):
+            class S:
+                def to_dataframe(self): return statement
+            return S()
+
+    class Obj(FakeObj):
+        @property
+        def financials(self): return MultiClass(402.8e9)
+
+    class Co(FakeCompany):
+        def get_filings(self, form):
+            return [FakeFiling("10-K", date(2026, 2, 5), "g1", Obj())] if form == "10-K" else []
+
+    src = SecSource("Qfii test@example.com", tmp_path, lambda sym: Co())
+    m = src.fundamentals("GOOGL", date(2026, 10, 9))["annual"]["metrics"]
+    assert m["diluted_eps"] == 10.81
+    assert m["diluted_shares"] == round(132.17e9 / 10.81)       # about 12.2 billion
+    assert m["diluted_shares_implied_from_eps"] is True
+
+    from qfii.agents.evidence import valuation_metrics
+    v = valuation_metrics(300.0, m)
+    assert v["pe_trailing_fy"] == pytest.approx(300 / 10.81, rel=1e-3)
