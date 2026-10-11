@@ -35,6 +35,21 @@ def member_prompt(view: DebateView, persona: str, feedback: str | None = None) -
             + persona + "\n" + json.dumps(private, separators=(",", ":"), default=str))
 
 
+def _previous_ballot(view: DebateView, member: str) -> dict[str, Any] | None:
+    for entry in reversed(view.transcript):
+        for b in entry["ballots"]:
+            if b["member"] == member and b["action"] != "abstain":
+                return b
+    return None
+
+
+def _changed(previous: dict[str, Any], ballot: Ballot) -> bool:
+    if previous["action"] != ballot.action:
+        return True
+    old, new = previous.get("size_usd"), ballot.size_usd
+    return bool(old and new and abs(new - old) / old > 0.01)
+
+
 def read_member_prompt(user: str) -> dict[str, Any]:
     """Inverse of member_prompt, for scripted models."""
     shared, _, rest = user.partition(_YOU)
@@ -76,6 +91,15 @@ class LLMMember:
                 data = parse_json_object(result.text)
                 data["member"] = self.name  # a member cannot vote as someone else
                 ballot = Ballot.model_validate(data)
+                previous = _previous_ballot(view, self.name)
+                if previous and _changed(previous, ballot) and not ballot.changed_because:
+                    raise ValueError(
+                        f"your vote changed from {previous['action']}"
+                        f"{' ' + str(previous.get('size_usd')) if previous.get('size_usd') else ''}"
+                        f" to {ballot.action}"
+                        f"{' ' + str(ballot.size_usd) if ballot.size_usd else ''}: fill "
+                        f"changed_because with the evidence or argument that changed it, or "
+                        f"keep your previous vote")
                 cap = view.rules.get("largest_allowed_order_usd")
                 if cap is not None and ballot.size_usd and ballot.size_usd > cap:
                     raise ValueError(f"size_usd {ballot.size_usd:,.0f} exceeds "

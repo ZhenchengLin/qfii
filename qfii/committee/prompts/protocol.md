@@ -28,10 +28,16 @@ Ballot actions (equal weight):
   revision. Put your feedback in request.
 
 A trade needs the number of votes in rules.trade_rule, and the sizes must be
-within rules.size_tolerance_pct of each other, so negotiate: if others proposed
-different sizes last round, move toward a size you can defend. A replace also
-needs agreement on which position to sell. If there is no decision after
-max_rounds, the paper is shelved. On the final round, request_info is wasted.
+within rules.size_tolerance_pct of each other. A replace also needs agreement
+on which position to sell.
+
+Vote your own judgment, in character, on the evidence. There is no time
+pressure and nothing is gained by agreeing: "no consensus" is a legitimate,
+recorded outcome. Never change your vote just to reach agreement or to move
+on. Change your action or size only when new evidence or a specific argument
+persuades you, and then fill `changed_because` naming that evidence or
+argument; if you keep your position, leave it empty. Negotiating a size is fine
+when you genuinely accept the other number.
 
 Use only numbers that appear in the input. size_usd may not exceed
 rules.largest_allowed_order_usd (computed from the hard limits and cash).
@@ -46,5 +52,6 @@ Reply with ONE JSON object and nothing else:
   "replace_symbol": "<ticker to sell, for replace>",
   "target": "assessment" | "risk" | "both",
   "request": "<question or revision feedback, for request_info/send_back>",
-  "note_to_self": "<optional: one lesson to remember for future debates>"
+  "note_to_self": "<optional: one lesson to remember for future debates>",
+  "changed_because": "<required only if your action or size changed since your last ballot>"
 }

@@ -27,7 +27,7 @@ def fake_member_responder(member: str) -> Callable[[str, str], str]:
         from .members import read_member_prompt
 
         view = read_member_prompt(user)
-        r = view["round"]
+        r = len(view["previous_rounds"]) + 1
         cap = _max_order(view["portfolio"])
         if cap < 100:
             return json.dumps({"action": "pass",
@@ -44,13 +44,17 @@ def fake_member_responder(member: str) -> Callable[[str, str], str]:
         size = round((anchor + holdout * (_PREFERENCE[member] * cap - anchor)) / 100) * 100
         others = [b for rnd in view["previous_rounds"] for b in rnd["ballots"]
                   if b["member"] != member and b.get("size_usd")]
+        mine = [b for rnd in view["previous_rounds"] for b in rnd["ballots"]
+                if b["member"] == member]
         reply = {
             "action": "invest", "size_usd": size,
             "argument": f"As {member}, I propose ${size:,.0f}"
                         + (f", moving toward the others' {[o['size_usd'] for o in others]}."
                            if others else "."),
         }
-        if view["final_round"]:
+        if mine and (mine[-1]["action"] != "invest" or mine[-1].get("size_usd") != size):
+            reply["changed_because"] = "the other members' sizes and the risk report"
+        if r >= 3:
             reply["note_to_self"] = f"{view['symbol']}: settled near ${anchor:,.0f}."
         return json.dumps(reply)
 

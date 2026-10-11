@@ -115,3 +115,14 @@ def test_filled_in_unused_fields_are_dropped(reply):
     if ballot.action != "request_info":
         assert ballot.target is None and ballot.request is None
     assert ballot.replace_symbol is None and ballot.note_to_self is None
+
+
+def test_data_gap_claims_need_no_citation():
+    from qfii.contracts import Claim, RiskFinding, RiskReport
+    gap = Claim(claim="No fundamentals are available.", data_gap=True)
+    assert gap.evidence_ids == []
+    with pytest.raises(ValueError, match="data_gap"):
+        Claim(claim="Revenue grew.")
+    report = RiskReport(symbol="X", as_of="2026-10-09", findings=[
+        RiskFinding(issue="No news coverage", severity="medium", data_gap=True)])
+    assert report.findings[0].data_gap

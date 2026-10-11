@@ -251,3 +251,29 @@ def test_max_new_order():
     snap = {"cash_usd": 25000, "equity_usd": 100000,
             "limits": {"max_order_usd": 10000, "max_position_pct": 10, "min_cash_pct": 20}}
     assert max_new_order_usd(snap) == 5000  # only $5k above the 20% cash floor
+
+
+async def test_members_are_not_told_the_round_limit():
+    members = [Scripted(m, PASS) for m in COMMITTEE]
+    await run_debate(dossier(), members, Teams(), RULES)
+    shown = members[0].views[0].as_prompt_dict()
+    assert not {"round", "max_rounds", "final_round"} & set(shown)
+    assert "max_rounds" not in shown["rules"]
+
+
+async def test_changing_a_vote_requires_a_reason():
+    """Anti-herding: a member that flips must name what changed its mind."""
+    replies = iter([
+        json.dumps({"action": "invest", "size_usd": 9000, "argument": "upside"}),
+        json.dumps({"action": "pass", "argument": "fine, whatever"}),          # flip, no reason
+        json.dumps({"action": "pass", "argument": "ok", "changed_because": "risk report "
+                    "showed a 34% drawdown"}),
+    ])
+    llm = FakeLLM(lambda s, u: next(replies))
+    member = LLMMember("aggressive", llm)
+    others = [Scripted("conservative", PASS, PASS), Scripted("neutral", PASS, PASS)]
+    result = await run_debate(dossier(), [member, *others], Teams(), RULES)
+    assert "fill changed_because" in llm.prompts[2][1]
+    final = result.rounds[1].ballots[0]
+    assert final.action == "pass" and final.changed_because.startswith("risk report")
+    assert result.outcome == "pass"

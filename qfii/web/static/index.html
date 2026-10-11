@@ -83,6 +83,7 @@ details summary { cursor: pointer; font-weight: 600; }
   background: var(--soft); color: var(--c); font-weight: 700; font-size: 13px; }
 .request { font-size: 13px; color: var(--info); margin: 0 0 6px; }
 .argument { margin: 0; font-size: 14px; white-space: pre-wrap; }
+.changed { margin: 0 0 6px; font-size: 13px; color: var(--warn); font-style: italic; }
 .waiting { color: var(--muted); font-size: 14px; margin-top: 10px; }
 .waiting::after { content: "…"; animation: pulse 1.2s infinite; }
 .result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
@@ -279,11 +280,13 @@ function renderReport(rep) {
   for (const a of r.answers || []) ul.append(el("li", null, a.claim));
   for (const f of r.findings || []) {
     const li = el("li"); li.append(el("span", "sev " + f.severity, f.severity), f.issue);
+    if (f.data_gap) li.append(el("span", "flag", " data gap"));
     if (f.detail) li.append(el("span", "rebuttal", " " + f.detail));
     ul.append(li);
   }
   for (const c of r.assumption_checks || []) {
-    const li = el("li"); li.append(el("span", c.holds ? "ok" : "no", c.holds ? "✓ " : "✗ "), c.assumption);
+    const mark = c.holds === true ? ["ok", "✓ "] : c.holds === false ? ["no", "✗ "] : ["sev", "? "];
+    const li = el("li"); li.append(el("span", mark[0], mark[1]), c.assumption);
     if (c.detail) li.append(el("span", "rebuttal", " " + c.detail));
     ul.append(li);
   }
@@ -317,6 +320,7 @@ function renderBallot(n, b) {
   card.replaceChildren(card.firstChild);
   card.append(el("span", "action", actionLabel(b)));
   if (b.request) card.append(el("p", "request", "“" + b.request + "”"));
+  if (b.changed_because) card.append(el("p", "changed", "Changed position because: " + b.changed_because));
   card.append(el("p", "argument", b.argument));
 }
 

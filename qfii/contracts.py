@@ -129,6 +129,7 @@ class Ballot(BaseModel):
     target: Team | None = None
     request: str | None = Field(default=None, max_length=1500)
     note_to_self: str | None = Field(default=None, max_length=500)
+    changed_because: str | None = Field(default=None, max_length=800)
 
     @model_validator(mode="before")
     @classmethod
@@ -219,12 +220,23 @@ Severity = Literal["low", "medium", "high", "blocking"]
 
 
 class Claim(BaseModel):
-    claim: str = Field(min_length=1, max_length=600)
-    evidence_ids: list[str] = Field(min_length=1)
+    """A cited statement. data_gap=True marks a statement about MISSING data
+    (e.g. "no fundamentals available"), which has nothing to cite."""
+
+    claim: str = Field(min_length=1, max_length=1200)
+    evidence_ids: list[str] = Field(default_factory=list)
+    data_gap: bool = False
+
+    @model_validator(mode="after")
+    def _cited_unless_gap(self) -> Claim:
+        if not self.evidence_ids and not self.data_gap:
+            raise ValueError("cite evidence_ids, or set data_gap=true if the claim is about "
+                             "missing data")
+        return self
 
 
 class Counterargument(Claim):
-    rebuttal: str | None = Field(default=None, max_length=600)
+    rebuttal: str | None = Field(default=None, max_length=1200)
 
 
 class Proposal(BaseModel):
@@ -245,17 +257,31 @@ class Proposal(BaseModel):
 
 
 class RiskFinding(BaseModel):
-    issue: str = Field(min_length=1, max_length=600)
+    issue: str = Field(min_length=1, max_length=800)
     severity: Severity
-    evidence_ids: list[str] = Field(min_length=1)
-    detail: str = Field(default="", max_length=800)
+    evidence_ids: list[str] = Field(default_factory=list)
+    data_gap: bool = False
+    detail: str = Field(default="", max_length=1500)
+
+    @model_validator(mode="after")
+    def _cited_unless_gap(self) -> RiskFinding:
+        if not self.evidence_ids and not self.data_gap:
+            raise ValueError("cite evidence_ids, or set data_gap=true for a missing-data finding")
+        return self
 
 
 class AssumptionCheck(BaseModel):
-    assumption: str = Field(max_length=400)   # quoted from the proposal
-    holds: bool
-    evidence_ids: list[str] = Field(min_length=1)
-    detail: str = Field(default="", max_length=600)
+    assumption: str = Field(max_length=800)   # quoted from the proposal
+    holds: bool | None                         # None: cannot be checked (data gap)
+    evidence_ids: list[str] = Field(default_factory=list)
+    data_gap: bool = False
+    detail: str = Field(default="", max_length=1500)
+
+    @model_validator(mode="after")
+    def _cited_unless_gap(self) -> AssumptionCheck:
+        if not self.evidence_ids and not self.data_gap:
+            raise ValueError("cite evidence_ids, or set data_gap=true if it cannot be checked")
+        return self
 
 
 class RiskReport(BaseModel):
@@ -265,10 +291,10 @@ class RiskReport(BaseModel):
     symbol: str
     as_of: str
     answers: list[Claim] = Field(default_factory=list)   # to the committee's questions
-    findings: list[RiskFinding] = Field(default_factory=list, max_length=15)
-    assumption_checks: list[AssumptionCheck] = Field(default_factory=list, max_length=15)
-    liquidity: str = Field(default="", max_length=600)
-    portfolio_impact: str = Field(default="", max_length=800)  # weight, cash after trade, tax
+    findings: list[RiskFinding] = Field(default_factory=list, max_length=20)
+    assumption_checks: list[AssumptionCheck] = Field(default_factory=list, max_length=20)
+    liquidity: str = Field(default="", max_length=1500)
+    portfolio_impact: str = Field(default="", max_length=1500)  # weight, cash after, tax
 
 
 # Machine-readable formats for every message in the system (docs/schemas/*.json).

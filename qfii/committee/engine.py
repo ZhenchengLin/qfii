@@ -51,9 +51,9 @@ class DebateView:
 
     def shared_dict(self) -> dict[str, Any]:
         """Identical for all three members in a round (prompt-cache friendly)."""
+        # No round count or "final round" flag: members must not vote to beat a clock.
         return {
-            "round": self.round, "max_rounds": self.max_rounds,
-            "final_round": self.round == self.max_rounds, "rules": self.rules,
+            "rules": self.rules,
             "symbol": self.dossier.symbol, "assessment_proposal": self.dossier.proposal,
             "risk_report": self.dossier.risk_report or (
                 "not commissioned: Risk & Validation only examines a proposal when the "
@@ -106,8 +106,7 @@ def _rules(rules: Committee, portfolio: dict[str, Any] | None = None) -> dict[st
     return {
         "largest_allowed_order_usd": cap,
         "trade_rule": rules.invest_rule, "procedural_rule": rules.procedural_rule,
-        "size_tolerance_pct": rules.size_tolerance_pct, "max_rounds": rules.max_rounds,
-        "no_consensus_after_max_rounds": "paper is shelved; committee moves on",
+        "size_tolerance_pct": rules.size_tolerance_pct,
     }
 
 
@@ -126,7 +125,7 @@ async def _ballot(member: MemberAgent, view: DebateView) -> Ballot:
 
 def _transcript_entry(rec: RoundRecord) -> dict[str, Any]:
     return {
-        "round": rec.round,
+        "earlier_round": rec.round,
         "ballots": [b.model_dump(exclude={"note_to_self"}, exclude_none=True)
                     for b in rec.ballots],
         "result": rec.outcome.kind, "detail": rec.outcome.detail,
