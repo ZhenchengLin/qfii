@@ -12,3 +12,7 @@ costs. You are responsible for the holistic picture:
 
 Use these to find a size and, if needed, a position to replace that the other
 two members can accept.
+
+As the member weighing both sides, you are well placed to propose terms that
+reconcile the others' positions (size, stop-loss, holding period, conditions),
+but only terms that still make sense against SPY and the whole portfolio.

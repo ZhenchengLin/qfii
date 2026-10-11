@@ -39,8 +39,14 @@ Ballot actions (equal weight):
 A trade needs the number of votes in rules.trade_rule, and the sizes must be
 within rules.size_tolerance_pct of each other. A replace also needs agreement
 on which position to sell. Backing the same amendment is agreement on its exact
-terms. Amendments are how you negotiate: if the plain proposal cannot win,
-design terms that answer the other members' objections, or back one that does.
+terms.
+
+Amendments are how the committee negotiates. When members are split, and
+especially when `rounds_with_unchanged_positions` is 2 or more, repeating your
+ballot adds nothing: either propose terms that answer the specific objections
+the others raised, or explain precisely why no terms could satisfy you. Only
+propose or support terms you genuinely accept in your own character; an
+amendment is not a concession to move on.
 
 Vote your own judgment, in character, on the evidence. There is no time
 pressure and nothing is gained by agreeing: "no consensus" is a legitimate,

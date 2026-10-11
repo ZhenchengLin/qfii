@@ -341,3 +341,11 @@ async def test_amendment_decision_is_saved_and_shown(cfg):
     assert detail["decision_terms"]["amendment_id"] == "A1"
     assert detail["amendments"][0]["proposed_by"] == "conservative"
     assert [r["result"] for r in detail["rounds"]] == ["continue", "invest"]
+
+
+async def test_members_see_how_long_positions_have_been_unchanged():
+    members = [Scripted("aggressive", *[INV] * 3), Scripted("conservative", *[PASS] * 3),
+               Scripted("neutral", *[PASS] * 3)]
+    await run_debate(dossier(), members, Teams(), RULES)
+    streaks = [v.as_prompt_dict()["rounds_with_unchanged_positions"] for v in members[0].views]
+    assert streaks == [0, 1, 2]

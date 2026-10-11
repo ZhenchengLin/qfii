@@ -63,6 +63,7 @@ class DebateView:
             "portfolio": self.dossier.portfolio,
             "amendments_on_the_table": [{"id": aid, **terms}
                                         for aid, terms in self.amendments.items()],
+            "rounds_with_unchanged_positions": _unchanged_streak(self.transcript),
             "additional_reports": self.info_reports, "previous_rounds": self.transcript,
         }
 
@@ -124,6 +125,24 @@ async def _ballot(member: MemberAgent, view: DebateView) -> Ballot:
         # toward nothing, so a model failure can never decide an outcome.
         return Ballot(member=member.name, action="abstain",
                       argument=f"[no valid ballot, abstains] {exc}"[:3000])
+
+
+def _positions(entry: dict[str, Any]) -> tuple:
+    return tuple(sorted((b["member"], b["action"], b.get("size_usd"), b.get("amendment_id"),
+                         b.get("target")) for b in entry["ballots"]))
+
+
+def _unchanged_streak(transcript: list[dict[str, Any]]) -> int:
+    """How many of the latest rounds repeated exactly the same ballots (a deadlock
+    signal; it does not reveal how many rounds are left)."""
+    if not transcript:
+        return 0
+    streak, last = 1, _positions(transcript[-1])
+    for entry in reversed(transcript[:-1]):
+        if _positions(entry) != last:
+            break
+        streak += 1
+    return streak
 
 
 def _transcript_entry(rec: RoundRecord) -> dict[str, Any]:
