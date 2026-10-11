@@ -114,6 +114,70 @@ def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
+    import httpx
+
+    from .data_fetch import (
+        FetchError,
+        fetch_company_facts,
+        fetch_fred_series,
+        fetch_sec_ciks,
+        fetch_yahoo_prices,
+        write_facts,
+        write_prices,
+        write_series,
+    )
+
+    symbols = [s.upper() for s in args.symbols] or [*cfg.symbols, cfg.portfolio.benchmark]
+    every = not (args.prices or args.macro or args.fundamentals)
+    failures = 0
+    with httpx.Client(timeout=30, follow_redirects=True) as http:
+        if every or args.prices:
+            for sym in symbols:
+                try:
+                    bars = fetch_yahoo_prices(http, sym, args.range)
+                    path = write_prices(cfg.csv_dir, sym, bars)
+                    print(f"prices  {sym:<6} {len(bars):>5} days  {bars[0].date}..{bars[-1].date}"
+                          f"  -> {path}")
+                except FetchError as exc:
+                    failures += 1
+                    print(f"prices  {sym:<6} FAILED: {exc}", file=sys.stderr)
+        if every or args.macro:
+            for sid in cfg.macro_series:
+                try:
+                    rows = fetch_fred_series(http, sid)
+                    write_series(cfg.macro_dir, sid, rows)
+                    print(f"macro   {sid:<13} {len(rows):>6} obs, latest {rows[-1][0]} = "
+                          f"{rows[-1][1]}")
+                except FetchError as exc:
+                    failures += 1
+                    print(f"macro   {sid} FAILED: {exc}", file=sys.stderr)
+        if every or args.fundamentals:
+            if not cfg.sec_user_agent:
+                print("fundamentals skipped: set data.sec_user_agent (SEC requires a contact, "
+                      'e.g. "Qfii research you@example.com")', file=sys.stderr)
+            else:
+                try:
+                    ciks = fetch_sec_ciks(http, cfg.sec_user_agent)
+                except FetchError as exc:
+                    print(f"fundamentals FAILED: {exc}", file=sys.stderr)
+                    return 1
+                for sym in symbols:
+                    if sym not in ciks:
+                        print(f"fundamentals {sym:<6} no SEC filer (ETF or foreign?), skipped")
+                        continue
+                    try:
+                        facts = fetch_company_facts(http, ciks[sym], cfg.sec_user_agent)
+                        write_facts(cfg.fundamentals_dir, sym, facts)
+                        print(f"fundamentals {sym:<6} {facts.get('entityName')}")
+                    except FetchError as exc:
+                        failures += 1
+                        print(f"fundamentals {sym} FAILED: {exc}", file=sys.stderr)
+    if every or args.prices:
+        print("\nTo use these prices set [data] source = \"csv\" in your config.")
+    return 1 if failures else 0
+
+
 def _cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -171,6 +235,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--as-of", type=date.fromisoformat, help="information cutoff YYYY-MM-DD")
     p.add_argument("--save", action="store_true", help="store packet, debate and memories")
 
+    p = sub.add_parser("data", help="download market data into local files")
+    p.add_argument("action", choices=["fetch"])
+    p.add_argument("--symbols", nargs="*", default=[],
+                   help="default: the universe plus the benchmark")
+    p.add_argument("--prices", action="store_true")
+    p.add_argument("--macro", action="store_true")
+    p.add_argument("--fundamentals", action="store_true")
+    p.add_argument("--range", default="5y", help="Yahoo range, e.g. 2y, 5y, max")
+
     p = sub.add_parser("serve", help="run an agent or the tool server")
     p.add_argument("agent", choices=["research", "tools"])
     p.add_argument("--host", default="127.0.0.1")
@@ -184,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
+                "data": _cmd_data,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)

@@ -6,8 +6,9 @@ from tests.conftest import AS_OF
 
 async def test_tools_listed_and_callable_over_mcp(cfg):
     async with ToolBox(cfg) as tools:
-        assert set(await tools.list()) == {"get_price_history", "compute_indicators",
-                                          "check_data_quality"}
+        assert set(await tools.list()) == {
+            "get_price_history", "compute_indicators", "check_data_quality",
+            "compare_to_benchmark", "get_macro_snapshot", "get_fundamentals"}
         ind = await tools.call("compute_indicators", symbol="aapl", as_of=AS_OF)
         assert ind["symbol"] == "AAPL" and ind["last_date"] <= AS_OF
         assert set(ind["indicators"]) >= {"rsi_14", "sma_200", "volatility_3m_ann"}

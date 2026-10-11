@@ -76,3 +76,31 @@ def compute_all(closes: list[float]) -> dict[str, dict]:
         value = fn(closes, window)
         out[name] = {"value": None if value is None else round(value, 6), "window": window}
     return out
+
+
+def benchmark_stats(symbol_bars: list[tuple[str, float]], bench_bars: list[tuple[str, float]],
+                    window: int = TRADING_DAYS) -> dict[str, float | None]:
+    """Excess returns vs the benchmark and 12-month beta / correlation, on dates both have."""
+    bench = dict(bench_bars)
+    pairs = [(c, bench[d]) for d, c in symbol_bars if d in bench]
+    out: dict[str, float | None] = {}
+    for name, days in (("excess_return_3m", 63), ("excess_return_12m", 252)):
+        if len(pairs) > days:
+            s = pairs[-1][0] / pairs[-1 - days][0] - 1
+            b = pairs[-1][1] / pairs[-1 - days][1] - 1
+            out[name] = round(s - b, 6)
+        else:
+            out[name] = None
+    tail = pairs[-window - 1:]
+    if len(tail) > 20:
+        rs = [math.log(b[0] / a[0]) for a, b in itertools.pairwise(tail)]
+        rb = [math.log(b[1] / a[1]) for a, b in itertools.pairwise(tail)]
+        var_b = statistics.variance(rb)
+        out["beta_12m"] = round(statistics.covariance(rs, rb) / var_b, 6) if var_b else None
+        try:
+            out["correlation_12m"] = round(statistics.correlation(rs, rb), 6)
+        except statistics.StatisticsError:  # one series is constant
+            out["correlation_12m"] = None
+    else:
+        out["beta_12m"] = out["correlation_12m"] = None
+    return out

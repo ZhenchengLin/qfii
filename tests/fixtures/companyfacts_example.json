@@ -1,0 +1,136 @@
+{
+ "cik": 1,
+ "entityName": "Example Corp",
+ "facts": {
+  "us-gaap": {
+   "RevenueFromContractWithCustomerExcludingAssessedTax": {
+    "units": {
+     "USD": [
+      {
+       "start": "2023-10-01",
+       "end": "2024-09-30",
+       "val": 100000000000.0,
+       "form": "10-K",
+       "fp": "FY",
+       "filed": "2024-11-01"
+      },
+      {
+       "start": "2024-10-01",
+       "end": "2025-09-30",
+       "val": 120000000000.0,
+       "form": "10-K",
+       "fp": "FY",
+       "filed": "2025-10-31"
+      },
+      {
+       "start": "2025-04-01",
+       "end": "2025-06-30",
+       "val": 30000000000.0,
+       "form": "10-Q",
+       "fp": "Q3",
+       "filed": "2025-08-01"
+      },
+      {
+       "start": "2023-10-01",
+       "end": "2024-09-30",
+       "val": 101000000000.0,
+       "form": "10-K/A",
+       "fp": "FY",
+       "filed": "2026-01-15"
+      }
+     ]
+    }
+   },
+   "NetIncomeLoss": {
+    "units": {
+     "USD": [
+      {
+       "start": "2023-10-01",
+       "end": "2024-09-30",
+       "val": 20000000000.0,
+       "form": "10-K",
+       "fp": "FY",
+       "filed": "2024-11-01"
+      },
+      {
+       "start": "2024-10-01",
+       "end": "2025-09-30",
+       "val": 30000000000.0,
+       "form": "10-K",
+       "fp": "FY",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   },
+   "EarningsPerShareDiluted": {
+    "units": {
+     "USD/shares": [
+      {
+       "start": "2024-10-01",
+       "end": "2025-09-30",
+       "val": 6.5,
+       "form": "10-K",
+       "fp": "FY",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   },
+   "Assets": {
+    "units": {
+     "USD": [
+      {
+       "end": "2025-06-30",
+       "val": 300000000000.0,
+       "form": "10-Q",
+       "filed": "2025-08-01"
+      },
+      {
+       "end": "2025-09-30",
+       "val": 320000000000.0,
+       "form": "10-K",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   },
+   "Liabilities": {
+    "units": {
+     "USD": [
+      {
+       "end": "2025-09-30",
+       "val": 200000000000.0,
+       "form": "10-K",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   },
+   "StockholdersEquity": {
+    "units": {
+     "USD": [
+      {
+       "end": "2025-09-30",
+       "val": 120000000000.0,
+       "form": "10-K",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   },
+   "LongTermDebtNoncurrent": {
+    "units": {
+     "USD": [
+      {
+       "end": "2025-09-30",
+       "val": 60000000000.0,
+       "form": "10-K",
+       "filed": "2025-10-31"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

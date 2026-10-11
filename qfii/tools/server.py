@@ -8,16 +8,20 @@ from datetime import date
 from mcp.server.mcpserver import MCPServer
 
 from ..config import Config
-from .indicators import compute_all
-from .market import load_prices
+from .fundamentals import fundamentals, load_facts
+from .indicators import benchmark_stats, compute_all
+from .macro import macro_snapshot
+from .market import DataError, load_prices
 from .quality import quality_flags
 
 
 def build_tool_server(cfg: Config) -> MCPServer:
     server = MCPServer(
         "qfii-tools",
-        instructions="Market data, technical indicators and data-quality checks for Qfii. "
-                     "All tools take an as_of date (YYYY-MM-DD) and never return later data.",
+        instructions="Market data, technical indicators, benchmark comparison, macro "
+                     "conditions, company fundamentals and data-quality checks for Qfii. All "
+                     "tools take an as_of date (YYYY-MM-DD) and never return data that was "
+                     "not public by then.",
     )
 
     def _bars(symbol: str, as_of: str):
@@ -51,5 +55,36 @@ def build_tool_server(cfg: Config) -> MCPServer:
                               min_observations=cfg.min_observations,
                               stale_after_days=cfg.stale_after_days)
         return {"symbol": symbol.upper(), "as_of": as_of, "n": len(bars), "flags": flags}
+
+    @server.tool()
+    def compare_to_benchmark(symbol: str, as_of: str) -> dict:
+        """Excess return vs the benchmark (S&P 500 ETF by default) over 3 and 12 months,
+        and 12-month beta and correlation."""
+        bars = _bars(symbol, as_of)
+        bench = _bars(cfg.portfolio.benchmark, as_of)
+        stats = benchmark_stats([(b.date, b.close) for b in bars],
+                                [(b.date, b.close) for b in bench])
+        return {"symbol": symbol.upper(), "benchmark": cfg.portfolio.benchmark, "as_of": as_of,
+                "source": cfg.data_source, "stats": stats}
+
+    @server.tool()
+    def get_macro_snapshot(as_of: str) -> dict:
+        """Latest public value (respecting publication lag) and the values 3 and 12 months
+        earlier for rates, inflation, unemployment, credit spreads and volatility."""
+        return {"as_of": as_of, "source": "FRED",
+                "series": macro_snapshot(cfg.macro_dir, list(cfg.macro_series),
+                                         date.fromisoformat(as_of))}
+
+    @server.tool()
+    def get_fundamentals(symbol: str, as_of: str) -> dict:
+        """Latest annual income, cash flow and balance-sheet figures from SEC filings filed
+        on or before as_of, plus revenue growth, net margin and leverage."""
+        try:
+            facts = load_facts(cfg.fundamentals_dir, symbol.upper())
+        except DataError as exc:
+            return {"symbol": symbol.upper(), "as_of": as_of, "available": False,
+                    "reason": str(exc)}
+        out = fundamentals(facts, date.fromisoformat(as_of))
+        return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR", **out}
 
     return server

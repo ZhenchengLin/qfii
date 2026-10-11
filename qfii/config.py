@@ -78,6 +78,10 @@ class Config:
     symbols: tuple[str, ...]
     data_source: str
     csv_dir: Path
+    macro_dir: Path
+    fundamentals_dir: Path
+    macro_series: tuple[str, ...]
+    sec_user_agent: str
     mcp_url: str
     queue_cap: int
     cache_ttl_hours: int
@@ -207,6 +211,10 @@ def _build(raw: dict[str, Any]) -> Config:
         symbols=tuple(s.upper() for s in symbols),
         data_source=raw["data"]["source"],
         csv_dir=Path(raw["data"]["csv_dir"]),
+        macro_dir=Path(raw["data"]["macro_dir"]),
+        fundamentals_dir=Path(raw["data"]["fundamentals_dir"]),
+        macro_series=tuple(raw["data"]["macro_series"]),
+        sec_user_agent=raw["data"]["sec_user_agent"],
         mcp_url=raw["tools"]["mcp_url"],
         queue_cap=int(_number(raw["research"], "queue_cap", "research", lo=1, integer=True)),
         cache_ttl_hours=int(

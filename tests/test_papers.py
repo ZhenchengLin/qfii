@@ -3,8 +3,18 @@ import sqlite3
 import pytest
 
 from qfii.db import connect, init_db
-from qfii.papers import (ACTIVE, STATES, TERMINAL, TRANSITIONS, IllegalTransition, count_by_state,
-                         create_paper, history, state_of, transition)
+from qfii.papers import (
+    ACTIVE,
+    STATES,
+    TERMINAL,
+    TRANSITIONS,
+    IllegalTransition,
+    count_by_state,
+    create_paper,
+    history,
+    state_of,
+    transition,
+)
 
 
 @pytest.fixture

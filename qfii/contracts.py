@@ -20,8 +20,10 @@ QualityFlag = Literal[
     "short_sample",      # fewer than research.min_observations data points
     "missing_values",    # gaps or non-positive prices in the series
     "synthetic_data",    # development data, not real market prices
-    "no_fundamentals",   # fundamental tools not connected yet
-    "no_macro_news",     # macro/news tools not connected yet
+    "no_fundamentals",   # no SEC fundamentals available as of the cutoff
+    "no_macro",          # no macro series available as of the cutoff
+    "no_news",           # news tools not connected yet
+    "no_benchmark",      # benchmark comparison unavailable
 ]
 
 
@@ -81,7 +83,7 @@ class Observation(BaseModel):
 class ResearchNotes(BaseModel):
     """The JSON the Research LLM must return."""
 
-    observations: list[Observation] = Field(min_length=1, max_length=12)
+    observations: list[Observation] = Field(min_length=1, max_length=30)
     gaps: list[str] = Field(default_factory=list, max_length=10)
 
 
