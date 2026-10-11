@@ -12,7 +12,7 @@ from ...portfolio import max_new_order_usd
 from ...tools.client import ToolBox
 from ..evidence import Collected, collect_evidence
 from ..structured import fact_rows, structured_call
-from ..tooluse import research_then_answer
+from ..tooluse import research_then_answer, with_tools
 from .fake import fake_assessment_responder, fake_risk_responder
 
 _PROMPTS = resources.files("qfii.agents.teams")
@@ -79,10 +79,9 @@ class AssessmentAgent:
         Returns (answer, evidence it gathered, trace of tool calls)."""
         payload = {**self._base(packet, portfolio), "proposal": proposal.model_dump(),
                    "committee_questions": questions}
-        async with ToolBox(self.cfg) as tools:
-            return await research_then_answer(
-                self.llm, self.system, payload, AssessmentAnswer, tools, packet.as_of,
-                {e.id for e in packet.evidence}, self.calls, self.cfg.max_tool_turns)
+        return await with_tools(self.cfg, lambda tools: research_then_answer(
+            self.llm, self.system, payload, AssessmentAnswer, tools, packet.as_of,
+            {e.id for e in packet.evidence}, self.calls, self.cfg.max_tool_turns))
 
 
 def impact_facts(got: Collected, proposal: Proposal, portfolio: dict[str, Any],
@@ -143,9 +142,8 @@ class RiskAgent:
         def fix(data: dict[str, Any]) -> dict[str, Any]:
             return {**data, "symbol": packet.symbol, "as_of": packet.as_of}
 
-        async with ToolBox(self.cfg) as tools:
-            report, more, self.trace = await research_then_answer(
-                self.llm, self.system, payload, RiskReport, tools, packet.as_of, known,
-                self.calls, self.cfg.max_tool_turns, fix)
+        report, more, self.trace = await with_tools(self.cfg, lambda tools: research_then_answer(
+            self.llm, self.system, payload, RiskReport, tools, packet.as_of, known,
+            self.calls, self.cfg.max_tool_turns, fix))
         self.evidence = got.evidence + more
         return report

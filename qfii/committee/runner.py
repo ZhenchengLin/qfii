@@ -23,6 +23,7 @@ from ..contracts import EvidencePacket, Proposal, ResearchRequest
 from ..papers import transition
 from ..portfolio import snapshot
 from ..store import record_llm_calls, save_debate, save_packet, save_proposal
+from ..tools.client import ToolError, root_cause
 from .engine import DebateResult, Dossier, run_debate
 from .members import build_members
 from .memory import recall_all
@@ -65,8 +66,11 @@ class Teams:
             else:
                 rep, evidence, trace = await self.assessment.answer(
                     self.packet, self.portfolio, self.proposal, requests)
-        except AgentFailed as exc:
-            return {"team": team, "error": str(exc)}
+        except (AgentFailed, BaseExceptionGroup) as exc:
+            cause = root_cause(exc)
+            if not isinstance(cause, AgentFailed | ToolError):
+                raise
+            return {"team": team, "error": str(cause)}   # shown in the round, debate goes on
         # what the team looked up or calculated, so the committee can see the work
         looked_up = {e.id: e for e in evidence}
         return {"team": team, **rep.model_dump(exclude_none=True),

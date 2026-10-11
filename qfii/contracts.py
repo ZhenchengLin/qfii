@@ -256,6 +256,17 @@ class Claim(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     data_gap: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def _aliases(cls, data: Any) -> Any:
+        # live models wrote {"question": ..., "answer": ...} instead of {"claim": ...}
+        if isinstance(data, dict) and "claim" not in data:
+            for alias in ("answer", "statement", "text", "finding"):
+                if alias in data:
+                    data = {**data, "claim": data[alias]}
+                    break
+        return data
+
     @model_validator(mode="after")
     def _cited_unless_gap(self) -> Claim:
         if not self.evidence_ids and not self.data_gap:
@@ -291,6 +302,17 @@ class RiskFinding(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     data_gap: bool = False
     detail: str = Field(default="", max_length=1500)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _aliases(cls, data: Any) -> Any:
+        # live models wrote a finding's text as "claim"
+        if isinstance(data, dict) and "issue" not in data:
+            for alias in ("claim", "finding", "title", "risk"):
+                if alias in data:
+                    data = {**data, "issue": data[alias]}
+                    break
+        return data
 
     @model_validator(mode="after")
     def _cited_unless_gap(self) -> RiskFinding:

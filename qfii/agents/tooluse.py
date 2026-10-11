@@ -44,6 +44,22 @@ net income) and cite its result. When you have what you need, give "final".
 """
 
 
+async def with_tools(cfg: Any, work) -> Any:
+    """Run `work(tools)` in an MCP tool session. A failure inside an async MCP
+    context comes out wrapped in an ExceptionGroup; re-raise it plainly after the
+    session has closed so callers can catch AgentFailed."""
+    failure: BaseException | None = None
+    result: Any = None
+    async with ToolBox(cfg) as tools:
+        try:
+            result = await work(tools)
+        except Exception as exc:  # noqa: BLE001 - re-raised below, outside the context
+            failure = exc
+    if failure is not None:
+        raise failure
+    return result
+
+
 def _shorten(value: Any, text_cap: int) -> Any:
     if isinstance(value, str):
         return value if len(value) <= text_cap else value[:text_cap] + " …"
@@ -97,6 +113,7 @@ async def research_then_answer(llm: LLM, system: str, payload: dict[str, Any],
     from .structured import AgentFailed
 
     catalog = [t for t in await tools.describe() if t["name"] not in HIDDEN_TOOLS]
+    final_format = model.model_json_schema()
     names = {t["name"] for t in catalog}
     gathered: list[EvidenceItem] = []
     trace: list[dict[str, Any]] = []
@@ -105,7 +122,7 @@ async def research_then_answer(llm: LLM, system: str, payload: dict[str, Any],
     for turn in range(1, max_turns + 1):
         last = turn == max_turns
         body = {**payload, "available_tools": catalog, "tool_results": results,
-                "turns_left": max_turns - turn}
+                "turns_left": max_turns - turn, "final_report_format": final_format}
         if last:
             body["instruction"] = "No tool turns left: reply with {\"final\": ...} now."
         if feedback:

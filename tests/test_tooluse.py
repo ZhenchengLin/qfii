@@ -98,3 +98,41 @@ def test_large_results_keep_whole_items_not_cut_text():
     assert out["hits"][0]["rank"] == 0                     # best hit kept
     assert all(h["text"].startswith(f"passage {h['rank']} ") for h in out["hits"])
     assert len(json.dumps(out)) <= 8000
+
+
+async def test_a_failing_team_does_not_end_the_debate(cfg):
+    """Live: a RiskReport that never validated crashed the whole debate (ExceptionGroup)."""
+    from qfii.agents.research.agent import ResearchAgent
+    from qfii.agents.teams.agents import AssessmentAgent
+    from qfii.committee.engine import Dossier
+    from qfii.committee.runner import Teams
+    from qfii.contracts import ResearchRequest
+    from qfii.db import connect, init_db
+    from qfii.portfolio import snapshot
+
+    conn = connect(":memory:")
+    init_db(conn, 100_000)
+    packet, _ = await ResearchAgent(cfg).run(ResearchRequest(symbol="NVDA",
+                                                             as_of=date(2026, 10, 9)))
+    portfolio = snapshot(conn, cfg, date(2026, 10, 9)).model_dump(mode="json")
+    assessment = AssessmentAgent(cfg)
+    proposal = await assessment.propose(packet, portfolio)
+    teams = Teams(cfg, packet, portfolio, assessment, proposal)
+    teams.risk.llm.inner._responder = lambda s, u: json.dumps({"final": {"answers": [
+        {"question": "q", "evidence_ids": ["ev_nope"]}]}})
+    report = await teams.report("risk", ["[neutral] is it liquid?"],
+                                Dossier("NVDA", {}, None, portfolio))
+    assert report["team"] == "risk" and "no valid RiskReport" in report["error"]
+
+
+def test_report_field_aliases_seen_live():
+    from qfii.contracts import RiskReport
+
+    report = RiskReport.model_validate({
+        "symbol": "X", "as_of": AS_OF,
+        "answers": [{"question": "[aggressive] q", "answer": "No forward EPS is available.",
+                     "data_gap": True}],
+        "findings": [{"claim": "Forward valuation is unknown", "severity": "high",
+                      "data_gap": True}]})
+    assert report.answers[0].claim.startswith("No forward EPS")
+    assert report.findings[0].issue == "Forward valuation is unknown"
