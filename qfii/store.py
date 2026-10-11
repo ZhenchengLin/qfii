@@ -98,8 +98,10 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
     with conn:
         debate_id = conn.execute(
             "INSERT INTO debates (paper_id, proposal_id, risk_report_id, outcome, rounds_used, "
-            "started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (paper_id, proposal_id, None, result.outcome, len(result.rounds), now, now),
+            "started_at, ended_at, round_results_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (paper_id, proposal_id, None, result.outcome, len(result.rounds), now, now,
+             json.dumps([{"result": r.outcome.kind, "detail": r.outcome.detail}
+                         for r in result.rounds])),
         ).lastrowid
         for rec in result.rounds:
             for b in rec.ballots:

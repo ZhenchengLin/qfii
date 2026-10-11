@@ -132,3 +132,19 @@ def test_v3_database_gets_amendment_columns(tmp_path):
                  "amendment_id) VALUES (1, 2, 'neutral', 'support', 'x', 'now', 'A1')")
     cols = [r[1] for r in conn.execute("PRAGMA table_info(decisions)")]
     assert "terms_json" in cols and conn.execute("SELECT COUNT(*) FROM ballots").fetchone()[0] == 2
+
+
+def test_v6_database_gets_round_results_column(tmp_path):
+    path = tmp_path / "v6.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE debates (id INTEGER PRIMARY KEY, paper_id INTEGER, "
+                 "outcome TEXT, rounds_used INTEGER, started_at TEXT, ended_at TEXT)")
+    conn.execute("INSERT INTO debates VALUES (1, 1, 'pass', 2, 'now', 'now')")
+    conn.execute("PRAGMA user_version = 6")
+    conn.commit()
+    conn.close()
+    conn = connect(path)
+    init_db(conn, 1000)
+    assert schema_version(conn) == SCHEMA_VERSION
+    assert tuple(conn.execute("SELECT outcome, round_results_json FROM debates").fetchone()) \
+        == ("pass", None)

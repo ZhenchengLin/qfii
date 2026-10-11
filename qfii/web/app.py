@@ -126,17 +126,29 @@ class DebateServer:
             rounds.setdefault(rnd, {"round": rnd, "ballots": [], "reports": []})
             rounds[rnd]["reports"].append({"team": team, "requests": json.loads(questions),
                                            "report": json.loads(report or "null")})
-        # round results are not stored; vote counting is deterministic, so recompute them
+        stored = self.conn.execute("SELECT round_results_json FROM debates WHERE id = ?",
+                                   (did,)).fetchone()[0]
+        if stored:
+            for i, res in enumerate(json.loads(stored), start=1):
+                if i in rounds:
+                    rounds[i]["result"], rounds[i]["detail"] = res["result"], res["detail"]
+        # debates saved before v7 have no stored results: vote counting is
+        # deterministic, so recompute them with the current rules
         from ..committee.protocol import tally
         from ..contracts import Ballot
 
-        for rnd in rounds.values():
+        for rnd in ([] if stored else rounds.values()):
             ballots = [Ballot(**b) for b in rnd["ballots"]]
             for b, raw in zip(ballots, rnd["ballots"], strict=True):
                 b.amendment_id = raw.get("amendment_id")   # engine-assigned on propose
             if len(ballots) == len(COMMITTEE):
                 result = tally(ballots, self.cfg.committee, amendments)
                 rnd["result"], rnd["detail"] = result.kind, result.detail
+        last = rounds.get(rounds_used)
+        if not stored and last and outcome != "no_consensus" and last.get("result") != outcome:
+            # the debate ran under other rules (e.g. a stalemate majority pass)
+            last["result"] = outcome
+            last["detail"] = "decided under the committee rules in force at the time"
         return {
             "id": did, "symbol": symbol, "outcome": outcome, "rounds_used": rounds_used,
             "started_at": started, "size_usd": size,

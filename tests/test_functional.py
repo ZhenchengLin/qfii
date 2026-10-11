@@ -227,3 +227,40 @@ async def test_eval_reports_what_if_and_replays_from_the_database(cfg, conn, mon
     assert saved["papers"][0]["what_if"] == row["what_if"]
     assert saved["papers"][0]["rounds_total"] == 8
     assert saved["summary"]["what_if"] == w
+
+
+async def test_stalemate_pass_is_stored_and_shown_as_the_engine_counted_it(cfg, conn,
+                                                                         monkeypatch):
+    """The UI may run with other rules than the debate did: it shows what the
+    engine counted, not a recount."""
+    from dataclasses import replace
+
+    from qfii.committee.replay import load_debate
+    from qfii.web.app import build_app
+
+    scripted_committee(monkeypatch, HOLDOUT_PLAN)
+    rules = replace(cfg.committee, majority_pass_after_unchanged_rounds=2)
+    run = await run_paper(replace(cfg, committee=rules), conn, "NVDA", AS_OF, save=True)
+    assert run.outcome == "pass" and len(run.debate.rounds) == 4
+    assert "majority pass closes the paper" in run.debate.rounds[-1].outcome.detail
+    # replay under rules WITHOUT the stalemate pass still sees what happened
+    _, kinds = load_debate(conn, run.debate_id, cfg.committee)
+    assert kinds == ["request_info", "continue", "continue", "pass"]
+    detail = build_app(cfg).state.server.debate(run.debate_id)
+    assert [r["result"] for r in detail["rounds"]] == kinds
+    assert "majority pass" in detail["rounds"][-1]["detail"]
+
+
+async def test_ui_recount_fallback_for_debates_saved_before_v7(cfg, conn, monkeypatch):
+    from dataclasses import replace
+
+    from qfii.web.app import build_app
+
+    scripted_committee(monkeypatch, HOLDOUT_PLAN)
+    rules = replace(cfg.committee, majority_pass_after_unchanged_rounds=2)
+    run = await run_paper(replace(cfg, committee=rules), conn, "NVDA", AS_OF, save=True)
+    conn.execute("UPDATE debates SET round_results_json = NULL WHERE id = ?", (run.debate_id,))
+    detail = build_app(cfg).state.server.debate(run.debate_id)
+    assert [r["result"] for r in detail["rounds"]][:3] == ["request_info", "continue",
+                                                           "continue"]
+    assert detail["rounds"][-1]["result"] == "pass"

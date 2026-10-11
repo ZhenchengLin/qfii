@@ -87,8 +87,9 @@ def from_records(records: list[Any]) -> tuple[list[list[Ballot]], list[str]]:
 
 def load_debate(conn: sqlite3.Connection, debate_id: int, rules: Committee
                 ) -> tuple[list[list[Ballot]], list[str]]:
-    """A saved debate's ballots. Round outcomes are not stored; they are recomputed
-    with `rules`, which must be the rules the debate ran with."""
+    """A saved debate's ballots and each round's counted result. Debates saved
+    before schema v7 have no stored results: they are recomputed with `rules`,
+    which must then be the rules the debate ran with."""
     by_round: dict[int, list[Ballot]] = {}
     for rnd, member, action, size, repl, target, request, argument, aid, ajson in conn.execute(
             "SELECT round, member, action, size_usd, replace_symbol, target, request, argument, "
@@ -101,6 +102,10 @@ def load_debate(conn: sqlite3.Connection, debate_id: int, rules: Committee
         ballot.amendment_id = aid           # engine-assigned on propose
         by_round.setdefault(rnd, []).append(ballot)
     rounds = [by_round[r] for r in sorted(by_round)]
+    stored = conn.execute("SELECT round_results_json FROM debates WHERE id = ?",
+                          (debate_id,)).fetchone()
+    if stored and stored[0]:
+        return rounds, [r["result"] for r in json.loads(stored[0])]
     return rounds, outcome_kinds(rounds, rules)
 
 

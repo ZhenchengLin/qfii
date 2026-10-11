@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # Upgrades for databases created by an older version:
 #   {target version: (table the step rewrites, or None; SQL)} or a list of such steps.
@@ -107,6 +107,8 @@ CREATE TABLE ballots (
 INSERT INTO ballots (id, debate_id, round, member, action, size_usd, replace_symbol, target, request, argument, llm_call_id, created_at, amendment_id, amendment_json, changed_because) SELECT id, debate_id, round, member, action, size_usd, replace_symbol, target, request, argument, llm_call_id, created_at, amendment_id, amendment_json, changed_because FROM ballots_v5;
 DROP TABLE ballots_v5;
 """),
+    # each round's counted result as the engine saw it (rules can change later)
+    7: ("debates", "ALTER TABLE debates ADD COLUMN round_results_json TEXT;"),
 }
 
 

@@ -121,7 +121,9 @@ CREATE TABLE debates (
                                               'no_consensus')),
     rounds_used       INTEGER NOT NULL DEFAULT 0,
     started_at        TEXT NOT NULL,
-    ended_at          TEXT
+    ended_at          TEXT,
+    -- [{"result", "detail"}] per round, counted under the rules the debate ran with
+    round_results_json TEXT
 );
 
 -- Each member's argument and ballot for one round. Ballots carry equal weight.
