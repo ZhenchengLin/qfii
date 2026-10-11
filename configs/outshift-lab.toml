@@ -37,3 +37,10 @@ max_output_tokens = 16000
 [runtime]
 exclusive_models = false
 max_concurrent_calls = 3
+
+# Lone-holdout stalemate: once all three members repeat the same ballot for 3
+# rounds, 2 of 3 pass votes close the paper. Measured in the lab: 11/11 stocks
+# decided in 5.5 rounds on average (vs 6/11 without it), NVDA and META still
+# negotiated into an invest. See README "Measure the committee".
+[committee]
+majority_pass_after_unchanged_rounds = 3
