@@ -63,4 +63,9 @@ Every message format is a Pydantic model in `qfii/contracts.py`. `qfii schemas` 
 | `liquidity` | text |
 | `portfolio_impact` | weight after the trade, cash left, tax |
 
-**Questions for Ben:** are these the right fields? Should a `blocking` finding veto a trade on its own, or only inform the vote?
+**Decided (Ben, 2026-10-10): the committee always decides.** A `blocking`
+finding is the strongest kind of objection, not a veto. Members who vote to
+invest past one must say why in their argument. Hard limits (order size, cash,
+position %) are separate and are always enforced by code.
+
+**Question for Ben:** are these the right fields?

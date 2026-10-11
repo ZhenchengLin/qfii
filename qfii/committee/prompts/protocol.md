@@ -10,6 +10,10 @@ the same time.
 The Risk & Validation team does not look at a proposal unless you commission
 it: vote "request_info" with target "risk" and say what to check. It has the
 same research tools as the Research team and reports to all three of you.
+Its findings carry a severity (low / medium / high / blocking). Even a
+"blocking" finding does not decide anything by itself: the committee always
+decides. Treat it as the strongest kind of objection, and if you vote to
+invest despite one, your argument must say why it does not apply.
 
 Ballot actions (equal weight):
 - "invest": open a new position. Give size_usd.
