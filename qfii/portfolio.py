@@ -12,6 +12,8 @@ from datetime import date
 from .config import Config
 from .contracts import Holding, PortfolioSnapshot
 from .db import cash_balance_cents
+from .investor import get_profile
+from .tax import tax_profile
 from .tools.market import load_prices
 
 ADV_WINDOW = 20
@@ -20,6 +22,8 @@ ADV_WINDOW = 20
 def snapshot(conn: sqlite3.Connection, cfg: Config, as_of: date) -> PortfolioSnapshot:
     cash = cash_balance_cents(conn) / 100
     pf, lim = cfg.portfolio, cfg.limits
+    profile = get_profile(conn)
+    tax = profile.tax if profile else tax_profile(None)
     lots_by_symbol: dict[str, list[tuple[float, float, date]]] = {}
     for symbol, qty, cost, opened in conn.execute(
             "SELECT symbol, qty_open, cost_per_share, opened_at FROM lots "
@@ -37,13 +41,13 @@ def snapshot(conn: sqlite3.Connection, cfg: Config, as_of: date) -> PortfolioSna
         qty = sum(q for q, _, _ in lots)
         cost_basis = sum(q * c for q, c, _ in lots)
         short_q = sum(q for q, _, d in lots if (as_of - d).days < pf.long_term_after_days)
-        tax = 0.0
+        est_tax = 0.0
         for q, c, d in lots:
             gain = (price - c) * q
-            rate = (pf.short_term_tax_pct if (as_of - d).days < pf.long_term_after_days
-                    else pf.long_term_tax_pct)
-            tax += max(gain, 0.0) * rate / 100
-        rows.append((symbol, qty, cost_basis, price, adv, short_q, tax,
+            rate = (tax.short_term_pct if (as_of - d).days < pf.long_term_after_days
+                    else tax.long_term_pct)
+            est_tax += max(gain, 0.0) * rate / 100
+        rows.append((symbol, qty, cost_basis, price, adv, short_q, est_tax,
                      max((as_of - d).days for _, _, d in lots)))
 
     equity = cash + sum(qty * price for _, qty, _, price, *_ in rows)
@@ -54,10 +58,10 @@ def snapshot(conn: sqlite3.Connection, cfg: Config, as_of: date) -> PortfolioSna
             weight_pct=round(qty * price / equity * 100, 2) if equity else 0.0,
             unrealized_pnl_usd=round(qty * price - cost_basis, 2),
             oldest_lot_days=days, short_term_qty=short_q, long_term_qty=qty - short_q,
-            est_tax_if_sold_usd=round(tax, 2), avg_daily_volume_usd=round(adv, 2),
+            est_tax_if_sold_usd=round(est, 2), avg_daily_volume_usd=round(adv, 2),
             pct_of_daily_volume=round(qty * price / adv * 100, 4) if adv else 100.0,
         )
-        for symbol, qty, cost_basis, price, adv, short_q, tax, days in rows
+        for symbol, qty, cost_basis, price, adv, short_q, est, days in rows
     ]
     return PortfolioSnapshot(
         as_of=as_of.isoformat(), cash_usd=round(cash, 2), equity_usd=round(equity, 2),
@@ -66,6 +70,9 @@ def snapshot(conn: sqlite3.Connection, cfg: Config, as_of: date) -> PortfolioSna
         limits={"max_position_pct": lim.max_position_pct, "max_order_usd": lim.max_order_usd,
                 "min_cash_pct": lim.min_cash_pct, "daily_order_cap": lim.daily_order_cap},
         costs_bps={"commission": pf.commission_bps, "slippage": pf.slippage_bps},
-        tax={"short_term_pct": pf.short_term_tax_pct, "long_term_pct": pf.long_term_tax_pct,
-             "long_term_after_days": pf.long_term_after_days},
+        tax={**tax.to_dict(), "long_term_after_days": pf.long_term_after_days},
+        investor={"capital_usd": profile.capital_usd if profile else None,
+                  "filing_status": tax.filing_status,
+                  "income_provided": tax.income_usd is not None,
+                  "profile_set": profile is not None},
     )

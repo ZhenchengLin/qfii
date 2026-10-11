@@ -53,7 +53,7 @@ def test_override_merges(tmp_path):
     ("[committee]\nmax_rounds = 0\n", "max_rounds"),
     ('[committee]\ninvest_rule = "chair_decides"\n', "committee.invest_rule"),
     ('[committee]\nno_consensus = "buy"\n', "unknown config key: committee.no_consensus"),
-    ("[portfolio]\nshort_term_tax_pct = 120\n", "short_term_tax_pct"),
+    ("[portfolio]\nshort_term_tax_pct = 30\n", "unknown config key: portfolio.short_term"),
     ("[agents.chair]\ntier = \"strongest\"\n", "unknown config key: agents.chair"),
     ('[models.mid]\nprovider = "magic"\n', "provider"),
     ('[models.mid]\nprovider = "openai_compat"\n', "base_url"),

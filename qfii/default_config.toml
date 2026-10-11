@@ -143,14 +143,12 @@ size_tolerance_pct = 10.0
 max_send_backs = 1
 memory_items = 20
 
-# Portfolio economics the neutral member must account for. Placeholders until
-# Ben sets them.
+# Portfolio economics every agent but Research sees. Tax rates are NOT set here:
+# they come from the user's income and filing status (`qfii setup`), see tax.py.
 [portfolio]
 benchmark = "SPY"
 commission_bps = 0.0
 slippage_bps = 5.0
-short_term_tax_pct = 35.0
-long_term_tax_pct = 15.0
 long_term_after_days = 365
 
 # Hard limits. Enforced in code; no agent can override them.

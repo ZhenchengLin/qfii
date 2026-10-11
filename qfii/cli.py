@@ -46,8 +46,7 @@ def _cmd_config(cfg: Config, args: argparse.Namespace) -> int:
           f"max {c.max_rounds} rounds then shelve")
     pf = cfg.portfolio
     print(f"portfolio:  benchmark={pf.benchmark} costs={pf.commission_bps}+{pf.slippage_bps}bps "
-          f"tax={pf.short_term_tax_pct}%/{pf.long_term_tax_pct}% "
-          f"(long-term after {pf.long_term_after_days}d)")
+          f"long-term after {pf.long_term_after_days}d; tax rates from `qfii setup`")
     return 0
 
 
@@ -205,6 +204,26 @@ def _cmd_request(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_setup(cfg: Config, args: argparse.Namespace) -> int:
+    from .investor import SetupError, set_profile
+
+    conn = connect(cfg.db_path)
+    init_db(conn, cfg.limits.starting_cash_usd)
+    try:
+        profile = set_profile(conn, args.capital, args.income, args.filing, args.state_tax_pct)
+    except (SetupError, ValueError) as exc:
+        print(f"setup error: {exc}", file=sys.stderr)
+        return 2
+    t = profile.tax
+    print(f"capital:    ${profile.capital_usd:,.2f} available to the committee")
+    print(f"tax:        short-term {t.short_term_pct:.1f}%, long-term {t.long_term_pct:.1f}% "
+          f"(federal {t.ordinary_bracket_pct:.0f}% / {t.ltcg_pct:.0f}% LTCG"
+          f"{f' + {t.niit_pct}% NIIT' if t.niit_pct else ''}"
+          f"{f' + {t.state_pct}% state' if t.state_pct else ''})")
+    print(f"basis:      {t.basis}")
+    return 0
+
+
 def _cmd_status(cfg: Config, args: argparse.Namespace) -> int:
     from .discovery import queue_depth, spent_today_usd
     from .papers import count_by_state
@@ -221,6 +240,16 @@ def _cmd_status(cfg: Config, args: argparse.Namespace) -> int:
         print(f"spend {agent:<12} ${spent_today_usd(conn, agent):.4f} of "
               f"${spec.daily_budget_usd:.2f} today")
     print(f"cash:       ${cash_balance_cents(conn) / 100:,.2f}")
+    from .investor import get_profile
+
+    profile = get_profile(conn)
+    if profile:
+        t = profile.tax
+        print(f"investor:   capital ${profile.capital_usd:,.0f}, {t.filing_status}, tax "
+              f"{t.short_term_pct:.1f}% short / {t.long_term_pct:.1f}% long"
+              + (" (assumed)" if t.assumed else ""))
+    else:
+        print("investor:   not set up (run `qfii setup --capital ...`)")
     return 0
 
 
@@ -305,6 +334,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("status", help="pipeline, queue and budget overview")
 
+    p = sub.add_parser("setup", help="set the capital to invest and the tax situation")
+    p.add_argument("--capital", type=float, required=True, help="dollars the committee may use")
+    p.add_argument("--income", type=float, help="annual income, sets the tax bracket")
+    p.add_argument("--filing", choices=["single", "married_joint"], default="single")
+    p.add_argument("--state-tax-pct", type=float, default=0.0)
+
     p = sub.add_parser("serve", help="run an agent or the tool server")
     p.add_argument("agent", choices=["research", "tools"])
     p.add_argument("--host", default="127.0.0.1")
@@ -319,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
-                "status": _cmd_status,
+                "status": _cmd_status, "setup": _cmd_setup,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)

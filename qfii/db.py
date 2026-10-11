@@ -7,7 +7,22 @@ from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Upgrades for databases created by an older version: {target version: SQL}.
+# schema.sql always holds the full current schema for new databases.
+MIGRATIONS = {
+    2: """
+CREATE TABLE IF NOT EXISTS investor_profile (
+    id             INTEGER PRIMARY KEY CHECK (id = 1),
+    capital_usd    REAL NOT NULL CHECK (capital_usd > 0),
+    income_usd     REAL CHECK (income_usd IS NULL OR income_usd >= 0),
+    filing_status  TEXT NOT NULL CHECK (filing_status IN ('single', 'married_joint')),
+    state_tax_pct  REAL NOT NULL DEFAULT 0 CHECK (state_tax_pct BETWEEN 0 AND 20),
+    updated_at     TEXT NOT NULL
+);
+""",
+}
 
 
 def utcnow() -> str:
@@ -30,12 +45,20 @@ def schema_version(conn: sqlite3.Connection) -> int:
 
 
 def init_db(conn: sqlite3.Connection, starting_cash_usd: float) -> bool:
-    """Create the schema and seed starting cash. Returns False if already initialised."""
+    """Create the schema and seed starting cash, or upgrade an older database.
+    Returns True only when a new database was created."""
     current = schema_version(conn)
     if current == SCHEMA_VERSION:
         return False
-    if current != 0:
-        raise RuntimeError(f"database is schema v{current}, expected v{SCHEMA_VERSION}")
+    if current > SCHEMA_VERSION:
+        raise RuntimeError(f"database is schema v{current}, newer than this code "
+                           f"(v{SCHEMA_VERSION})")
+    if current:
+        with conn:
+            for version in range(current + 1, SCHEMA_VERSION + 1):
+                conn.executescript(MIGRATIONS[version])
+                conn.execute(f"PRAGMA user_version = {version}")
+        return False
     sql = resources.files("qfii").joinpath("schema.sql").read_text()
     with conn:
         conn.executescript(sql)

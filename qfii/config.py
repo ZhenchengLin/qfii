@@ -72,8 +72,6 @@ class Portfolio:
     benchmark: str
     commission_bps: float
     slippage_bps: float
-    short_term_tax_pct: float
-    long_term_tax_pct: float
     long_term_after_days: int
 
 
@@ -160,8 +158,6 @@ def _portfolio(raw: dict[str, Any]) -> Portfolio:
         benchmark=raw["benchmark"].upper(),
         commission_bps=float(_number(raw, "commission_bps", "portfolio", lo=0, hi=1000)),
         slippage_bps=float(_number(raw, "slippage_bps", "portfolio", lo=0, hi=1000)),
-        short_term_tax_pct=float(_number(raw, "short_term_tax_pct", "portfolio", lo=0, hi=100)),
-        long_term_tax_pct=float(_number(raw, "long_term_tax_pct", "portfolio", lo=0, hi=100)),
         long_term_after_days=int(
             _number(raw, "long_term_after_days", "portfolio", lo=0, integer=True)
         ),

@@ -1,4 +1,4 @@
--- Qfii schema v1. Timestamps are ISO-8601 UTC text.
+-- Qfii schema (current version: db.SCHEMA_VERSION). Timestamps are ISO-8601 UTC text.
 -- Cash is stored in integer cents; JSON columns hold validated agent output.
 
 -- One "paper" = one stock analysis moving through the pipeline.
@@ -231,4 +231,14 @@ CREATE TABLE cash_ledger (
     ref_type      TEXT,
     ref_id        INTEGER,
     created_at    TEXT NOT NULL
+);
+
+-- What the user tells us: capital to allocate and tax situation. One row.
+CREATE TABLE IF NOT EXISTS investor_profile (
+    id             INTEGER PRIMARY KEY CHECK (id = 1),
+    capital_usd    REAL NOT NULL CHECK (capital_usd > 0),
+    income_usd     REAL CHECK (income_usd IS NULL OR income_usd >= 0),
+    filing_status  TEXT NOT NULL CHECK (filing_status IN ('single', 'married_joint')),
+    state_tax_pct  REAL NOT NULL DEFAULT 0 CHECK (state_tax_pct BETWEEN 0 AND 20),
+    updated_at     TEXT NOT NULL
 );

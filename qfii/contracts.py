@@ -175,7 +175,8 @@ class PortfolioSnapshot(BaseModel):
     benchmark: str
     limits: dict[str, float]
     costs_bps: dict[str, float]
-    tax: dict[str, float]
+    tax: dict[str, Any]          # TaxProfile + long_term_after_days; from the user's income
+    investor: dict[str, Any]     # capital the user allocated, filing status
 
 
 def ballot_reply_schema() -> dict[str, Any]:
