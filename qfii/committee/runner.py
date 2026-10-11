@@ -118,6 +118,11 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
     proposal_id = (save_proposal(conn, paper_id, proposal.model_dump(), verdict=proposal.verdict)
                    if save else None)
     if proposal.verdict != "submit":
+        if save and proposal.verdict == "needs_evidence":
+            from ..discovery import enqueue_request
+
+            for question in proposal.research_questions or ["missing evidence (unspecified)"]:
+                enqueue_request(conn, packet.symbol, question, "assessment", paper_id)
         return PaperRun(packet, proposal, paper_id=paper_id,
                         outcome=f"assessment_{proposal.verdict}")
 

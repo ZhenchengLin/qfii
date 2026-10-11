@@ -28,10 +28,18 @@ def _portfolio_view(portfolio: dict[str, Any]) -> dict[str, Any]:
             "largest_allowed_order_usd": max_new_order_usd(portfolio)}
 
 
+def fetchable_sources(cfg: Config, symbol: str) -> dict[str, bool]:
+    """What Research can actually obtain, so Assessment only asks for fetchable evidence."""
+    fundamentals = bool(cfg.sec_user_agent) or (cfg.fundamentals_dir / f"{symbol}.json").exists()
+    return {"prices_and_technicals": True, "benchmark_comparison": True, "macro": True,
+            "fundamentals": fundamentals, "news": False}
+
+
 class AssessmentAgent:
     name = "assessment"
 
     def __init__(self, cfg: Config):
+        self.cfg = cfg
         self.llm = make_llm(cfg, self.name, fake_assessment_responder)
         self.system = _PROMPTS.joinpath("assessment.md").read_text()
         self.calls: list[dict[str, Any]] = []
@@ -40,6 +48,7 @@ class AssessmentAgent:
         return {"symbol": packet.symbol, "as_of": packet.as_of,
                 "observations": _observations(packet), "facts": fact_rows(packet.evidence),
                 "quality_flags": packet.quality_flags, "gaps": packet.gaps,
+                "research_can_fetch": fetchable_sources(self.cfg, packet.symbol),
                 "portfolio": _portfolio_view(portfolio)}
 
     async def propose(self, packet: EvidencePacket, portfolio: dict[str, Any],

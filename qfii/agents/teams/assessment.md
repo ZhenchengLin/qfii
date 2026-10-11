@@ -10,9 +10,12 @@ From the research observations and citable facts, write a Proposal:
 - uncertainties and invalidation_conditions: what would prove you wrong.
 - expected_holding_period_days and suggested_position_pct (percent of equity;
   stay within portfolio.largest_allowed_order_usd).
-- verdict: "submit" only if the case is worth the committee's time; "reject" if
-  it is not; "defer" if timing is wrong; "needs_evidence" if a missing fact
-  (list it in research_questions) would decide it.
+- verdict: "submit" if the case is worth the committee's time, even with stated
+  gaps; "reject" if it is not; "defer" if timing is wrong; "needs_evidence"
+  only if a missing fact would decide it AND `research_can_fetch` says Research
+  can get it (list the questions in research_questions). Data that cannot be
+  fetched (false in research_can_fetch) is a known limitation: state it as an
+  uncertainty and still choose submit, reject or defer.
 
 Rules: use only the facts given; cite ids exactly; never invent numbers. Missing
 data (e.g. no fundamentals) is a weakness you must state, not hide.

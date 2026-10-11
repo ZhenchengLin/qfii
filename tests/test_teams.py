@@ -116,3 +116,29 @@ async def test_send_back_limit_shelves(cfg, conn, monkeypatch):
     run = await run_paper(replace(cfg, committee=replace(cfg.committee, max_send_backs=1)),
                           conn, "NVDA", AS_OF, save=False)
     assert run.outcome == "shelved_after_send_back" and len(run.debates) == 2
+
+
+async def test_needs_evidence_queues_research_requests(cfg, conn, monkeypatch):
+    def needs(system, user):
+        data = json.loads(user)
+        assert data["research_can_fetch"]["news"] is False
+        f = data["facts"][0]
+        return json.dumps({"thesis": "?", "arguments": [{"claim": "x", "evidence_ids": [f["id"]]}],
+                           "counterarguments": [{"claim": "y", "evidence_ids": [f["id"]]}],
+                           "feasibility": "n/a", "invalidation_conditions": ["z"],
+                           "expected_holding_period_days": 30, "suggested_position_pct": 1,
+                           "verdict": "needs_evidence",
+                           "research_questions": ["latest 10-year yield trend?"]})
+
+    monkeypatch.setattr("qfii.agents.teams.agents.fake_assessment_responder", needs)
+    run = await run_paper(cfg, conn, "NVDA", AS_OF, save=True)
+    assert run.outcome == "assessment_needs_evidence"
+    row = conn.execute("SELECT paper_id, question, requested_by FROM research_requests").fetchone()
+    assert tuple(row) == (run.paper_id, "latest 10-year yield trend?", "assessment")
+
+
+def test_fetchable_sources_reflect_config(cfg, tmp_path):
+    from qfii.agents.teams.agents import fetchable_sources
+
+    assert fetchable_sources(cfg, "NVDA")["fundamentals"] is False
+    assert fetchable_sources(replace(cfg, sec_user_agent="Qfii x@y.z"), "NVDA")["fundamentals"]

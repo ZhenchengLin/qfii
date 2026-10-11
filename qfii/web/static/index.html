@@ -341,8 +341,9 @@ function renderOutcome(o) {
       shelved_after_send_back: "Sent back too many times: shelved",
       shelved_revision_failed: "Revision failed: shelved" }[o.outcome] || o.outcome;
   const div = el("div", "outcome " + kind, text);
+  const rounds = o.rounds || o.rounds_used || 0;
   div.append(el("small", null, o.type === "error" ? o.message
-    : `after ${o.rounds || o.rounds_used} round(s)`));
+    : rounds ? `after ${rounds} round(s)` : "the committee did not debate it"));
   $("#rounds").append(div);
 }
 
