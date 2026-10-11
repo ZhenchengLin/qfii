@@ -178,6 +178,52 @@ def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _cmd_discover(cfg: Config, args: argparse.Namespace) -> int:
+    from .discovery import run_loop
+
+    conn = connect(cfg.db_path)
+    init_db(conn, cfg.limits.starting_cash_usd)
+
+    def show(n: int, report) -> None:
+        print(f"cycle {n}: {report.summary()}", flush=True)
+
+    cycles = None if args.forever else args.cycles
+    try:
+        asyncio.run(run_loop(cfg, conn, args.interval, cycles, args.as_of, show))
+    except KeyboardInterrupt:
+        print("stopped")
+    return 0
+
+
+def _cmd_request(cfg: Config, args: argparse.Namespace) -> int:
+    from .discovery import enqueue_request
+
+    conn = connect(cfg.db_path)
+    init_db(conn, cfg.limits.starting_cash_usd)
+    req_id = enqueue_request(conn, args.symbol, args.question)
+    print(f"research request #{req_id} queued for {args.symbol.upper()}")
+    return 0
+
+
+def _cmd_status(cfg: Config, args: argparse.Namespace) -> int:
+    from .discovery import queue_depth, spent_today_usd
+    from .papers import count_by_state
+
+    conn = connect(cfg.db_path)
+    init_db(conn, cfg.limits.starting_cash_usd)
+    counts = count_by_state(conn)
+    print("papers:     " + (", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none"))
+    print(f"queue:      {queue_depth(conn)} packet(s) awaiting Assessment (cap {cfg.queue_cap})")
+    open_req = conn.execute("SELECT COUNT(*) FROM research_requests WHERE status = 'open'"
+                            ).fetchone()[0]
+    print(f"requests:   {open_req} open")
+    for agent, spec in cfg.agents.items():
+        print(f"spend {agent:<12} ${spent_today_usd(conn, agent):.4f} of "
+              f"${spec.daily_budget_usd:.2f} today")
+    print(f"cash:       ${cash_balance_cents(conn) / 100:,.2f}")
+    return 0
+
+
 def _cmd_serve(cfg: Config, args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -244,6 +290,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fundamentals", action="store_true")
     p.add_argument("--range", default="5y", help="Yahoo range, e.g. 2y, 5y, max")
 
+    p = sub.add_parser("discover", help="run the continuous Research discovery loop")
+    p.add_argument("--cycles", type=int, default=1, help="cycles to run (default 1)")
+    p.add_argument("--forever", action="store_true", help="run until Ctrl-C")
+    p.add_argument("--interval", type=float, default=300, help="seconds between cycles")
+    p.add_argument("--as-of", type=date.fromisoformat, help="information cutoff YYYY-MM-DD")
+
+    p = sub.add_parser("request", help="queue a targeted research request")
+    p.add_argument("symbol")
+    p.add_argument("--question", required=True)
+
+    sub.add_parser("status", help="pipeline, queue and budget overview")
+
     p = sub.add_parser("serve", help="run an agent or the tool server")
     p.add_argument("agent", choices=["research", "tools"])
     p.add_argument("--host", default="127.0.0.1")
@@ -257,7 +315,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
-                "data": _cmd_data,
+                "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
+                "status": _cmd_status,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)

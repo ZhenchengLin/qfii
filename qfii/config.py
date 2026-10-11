@@ -83,8 +83,10 @@ class Config:
     macro_series: tuple[str, ...]
     sec_user_agent: str
     mcp_url: str
+    batch_size: int
     queue_cap: int
     cache_ttl_hours: int
+    min_avg_daily_volume_usd: float
     min_observations: int
     stale_after_days: int
     committee: Committee
@@ -216,7 +218,11 @@ def _build(raw: dict[str, Any]) -> Config:
         macro_series=tuple(raw["data"]["macro_series"]),
         sec_user_agent=raw["data"]["sec_user_agent"],
         mcp_url=raw["tools"]["mcp_url"],
+        batch_size=int(_number(raw["research"], "batch_size", "research", lo=1, integer=True)),
         queue_cap=int(_number(raw["research"], "queue_cap", "research", lo=1, integer=True)),
+        min_avg_daily_volume_usd=float(
+            _number(raw["research"], "min_avg_daily_volume_usd", "research", lo=0)
+        ),
         cache_ttl_hours=int(
             _number(raw["research"], "cache_ttl_hours", "research", lo=0, integer=True)
         ),

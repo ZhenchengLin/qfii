@@ -54,9 +54,9 @@ Committee protocol (Ben, 2026-10-10), implemented in `qfii/committee/`:
 | M0 | Config, hard limits, SQLite schema, CLI | done |
 | M1 | Research agent: MCP tools, LangGraph workflow, A2A server, cited EvidencePacket | done |
 | M1b | Committee: protocol and vote counting, debate engine, persona prompts, private memory, portfolio snapshot, `qfii debate` (fake members, placeholder team reports) | done |
-| M2 | Paper state machine (legal transitions only, event log) | next |
-| M3 | Real data + tools: prices incl. SPY, fundamentals (EDGAR), macro (FRED); portfolio MCP tools for Neutral | next |
-| M4 | Continuous discovery loop: universe scan, bounded queue, dedup, daily budget | next |
+| M2 | Paper state machine: legal transitions only, event log, DB-level state check | done |
+| M3 | Real data: `qfii data fetch` (Yahoo prices incl. SPY, FRED macro, SEC fundamentals); MCP tools for benchmark, macro (publication-lag aware), fundamentals (filed-by-as_of only) | done |
+| M4 | Continuous discovery: requests first, oldest-first universe scan, dedup, cheap screen (data quality, liquidity), queue cap, daily $ budget; `qfii discover/request/status` | done |
 | M5 | Assessment agent | needs Ben: Proposal spec |
 | M6 | Risk & Validation agent | needs Ben: RiskReport spec |
 | M7 | Committee with real models; send-back loop with `max_send_backs`; members as A2A servers | after M5–M6 |

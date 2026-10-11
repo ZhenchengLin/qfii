@@ -83,9 +83,15 @@ sec_user_agent = ""
 [tools]
 mcp_url = ""
 
+# Continuous discovery. batch_size: new symbols researched per cycle.
+# queue_cap: stop discovering while this many packets await Assessment.
+# cache_ttl_hours: do not re-research a symbol within this window.
+# min_avg_daily_volume_usd: cheap liquidity screen before any LLM call.
 [research]
+batch_size = 3
 queue_cap = 50
 cache_ttl_hours = 24
+min_avg_daily_volume_usd = 5000000.0
 min_observations = 200
 stale_after_days = 5
 

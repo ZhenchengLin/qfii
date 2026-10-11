@@ -45,6 +45,18 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/qfii research AAPL --as-of 2026-10-09          # one local run
 .venv/bin/qfii research AAPL --json                      # full EvidencePacket
 
+# real data (no API keys): Yahoo prices incl. SPY + FRED macro into data/
+.venv/bin/qfii data fetch
+printf '[data]\nsource = "csv"\n' > config.local.toml   # use it
+
+# the undergrads, continuously: requests first, then the universe in batches
+.venv/bin/qfii --config config.local.toml request JPM --question "rate sensitivity?"
+.venv/bin/qfii --config config.local.toml discover --forever --interval 300
+.venv/bin/qfii --config config.local.toml status
+
+# watch the committee debate one stock
+.venv/bin/qfii --config config.local.toml debate NVDA
+
 # as separate services (three terminals)
 .venv/bin/qfii serve tools                               # MCP on :9100/mcp
 .venv/bin/qfii --config live.toml serve research --save  # A2A on :9101
@@ -68,10 +80,13 @@ base_url = "http://localhost:8000/v1"
 api_key_env = "NIM_API_KEY"   # name of the env var, never the key itself
 ```
 
-Real prices: set `[data] source = "csv"` and put `data/prices/<SYMBOL>.csv`
-files (`date,close,volume`) in place. The default `synthetic` source is a
-deterministic random walk for development and is flagged `synthetic_data` in
-every packet.
+Data: `qfii data fetch` downloads adjusted daily prices (Yahoo chart API,
+unofficial), FRED macro series and, if `data.sec_user_agent` is set to a
+contact string as the SEC requires, EDGAR company facts. Agents only read the
+local files, always cut at `as_of`: macro figures respect publication lag and
+fundamentals only count filings filed by `as_of`. The default `synthetic`
+source is a deterministic random walk for offline development and is flagged
+`synthetic_data` in every packet.
 
 ## Layout
 
@@ -82,6 +97,11 @@ qfii/
   tools/                  MCP server + client, market data, indicators, quality gate
   agents/research/        LangGraph workflow, prompt, A2A server, fake model
   a2a_client.py           ask_agent(url, payload)
+  committee/              protocol (vote counting), engine, members, prompts, memory
+  papers.py               paper state machine
+  discovery.py            continuous research loop
+  data_fetch.py           Yahoo / FRED / SEC downloaders
+  portfolio.py            snapshot: cash, lots, tax, liquidity
   store.py, db.py, schema.sql, config.py, default_config.toml, cli.py
 docs/PLAN.md              milestones and open questions for Ben
 ```
