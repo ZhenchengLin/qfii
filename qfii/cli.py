@@ -196,6 +196,27 @@ def _cmd_ask_team(cfg: Config, args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def _cmd_eval(cfg: Config, args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .evaluate import evaluate
+
+    symbols = [s.upper() for s in args.symbols] or list(cfg.symbols)
+
+    def progress(row, summary) -> None:
+        extra = f" error: {row['error']}" if row.get("error") else ""
+        print(f"[{summary['papers']}/{len(symbols)}] {row['symbol']}: {row['outcome']} "
+              f"rounds={row.get('rounds_total')} reports={row.get('info_requests', 0)} "
+              f"amendments={row.get('amendments', 0)} {row.get('seconds')}s{extra} | "
+              f"avg rounds to conclusion so far: {summary['avg_rounds_to_conclusion']}",
+              flush=True)
+
+    result = asyncio.run(evaluate(cfg, symbols, args.as_of, Path(args.out), progress))
+    print(f"\nreport: {result['dir']}/report.md")
+    print(json.dumps(result["summary"], indent=2))
+    return 0
+
+
 def _cmd_bench(cfg: Config, args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -422,6 +443,8 @@ def main(argv: list[str] | None = None) -> int:
     import logging
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("mcp").setLevel(logging.WARNING)   # expected tool errors are reported
+
     parser = argparse.ArgumentParser(prog="qfii")
     parser.add_argument("--version", action="version", version=f"qfii {__version__}")
     parser.add_argument("--config", help="local TOML overriding the packaged defaults")
@@ -453,6 +476,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--question", action="append", required=True,
                    help="what Risk should check (repeatable)")
     p.add_argument("--as-of", type=date.fromisoformat)
+
+    p = sub.add_parser("eval", help="run the whole pipeline on many stocks and measure it")
+    p.add_argument("--symbols", nargs="*", default=[], help="default: the universe")
+    p.add_argument("--as-of", type=date.fromisoformat)
+    p.add_argument("--out", default="data/eval")
 
     p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
     p.add_argument("symbol")
@@ -511,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
-                "schemas": _cmd_schemas, "bench": _cmd_bench, "risk-check": _cmd_ask_team,
+                "schemas": _cmd_schemas, "bench": _cmd_bench, "eval": _cmd_eval, "risk-check": _cmd_ask_team,
                 "ask-team": _cmd_ask_team,
                 "ui": _cmd_ui,
                 "serve": _cmd_serve, "ask": _cmd_ask}
