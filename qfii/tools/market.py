@@ -8,8 +8,10 @@ import hashlib
 import math
 import random
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+
+from ..clock import AsOf
 
 
 @dataclass(frozen=True)
@@ -71,11 +73,48 @@ def csv_prices(csv_dir: Path, symbol: str) -> list[Bar]:
     return sorted(bars, key=lambda b: b.date)
 
 
-def load_prices(source: str, csv_dir: Path, symbol: str, as_of: date) -> list[Bar]:
+@dataclass(frozen=True)
+class IntradayBar:
+    time: datetime          # when the bar closed, US Eastern
+    close: float
+    volume: float
+
+
+def intraday_prices(intraday_dir: Path | None, symbol: str) -> list[IntradayBar]:
+    path = intraday_dir / f"{symbol}.csv" if intraday_dir else None
+    if path is None or not path.exists():
+        return []
+    out = []
+    with path.open(newline="") as fh:
+        for row in csv.DictReader(fh):
+            try:
+                out.append(IntradayBar(datetime.fromisoformat(row["time"]), float(row["close"]),
+                                       float(row.get("volume") or 0)))
+            except (KeyError, ValueError) as exc:
+                raise DataError(f"{path}: bad row {row}") from exc
+    return sorted(out, key=lambda b: b.time)
+
+
+def load_prices(source: str, csv_dir: Path, symbol: str, as_of: date | str | AsOf,
+                intraday_dir: Path | None = None) -> list[Bar]:
+    """Daily bars public at the cutoff. With a time-of-day cutoff, today's bar is
+    built from the 10-minute bars that had closed by then (last close, volume so
+    far); without intraday data, today's daily bar appears only after the close."""
+    cut = AsOf.parse(as_of)
     if source == "synthetic":
-        bars = synthetic_prices(symbol, as_of)
+        bars = synthetic_prices(symbol, cut.day)
     elif source == "csv":
         bars = csv_prices(csv_dir, symbol)
     else:
         raise DataError(f"unknown data source {source!r}")
-    return [b for b in bars if b.date <= as_of.isoformat()]
+    today = cut.day.isoformat()
+    if cut.at is None:
+        return [b for b in bars if b.date <= today]
+    out = [b for b in bars if b.date < today]
+    so_far = [b for b in intraday_prices(intraday_dir, symbol)
+              if b.time.date() == cut.day and cut.covers(b.time)]
+    if so_far:
+        out.append(Bar(today, so_far[-1].close, float(sum(b.volume for b in so_far))))
+    elif not cut.intraday:
+        out += [b for b in bars if b.date == today]
+    return out

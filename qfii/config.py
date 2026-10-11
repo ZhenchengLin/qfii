@@ -91,6 +91,7 @@ class Config:
     symbols: tuple[str, ...]
     data_source: str
     csv_dir: Path
+    intraday_dir: Path
     macro_dir: Path
     fundamentals_dir: Path
     macro_series: tuple[str, ...]
@@ -266,6 +267,7 @@ def _build(raw: dict[str, Any]) -> Config:
         symbols=tuple(s.upper() for s in symbols),
         data_source=raw["data"]["source"],
         csv_dir=Path(raw["data"]["csv_dir"]),
+        intraday_dir=Path(raw["data"]["intraday_dir"]),
         macro_dir=Path(raw["data"]["macro_dir"]),
         fundamentals_dir=Path(raw["data"]["fundamentals_dir"]),
         macro_series=tuple(raw["data"]["macro_series"]),

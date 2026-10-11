@@ -8,8 +8,15 @@
   search        keyword (BM25) search over passages from the 10-K risk factors and
                 MD&A, the 10-Q MD&A, and recent 8-K press releases
 
-Point in time: only filings with filing_date <= as_of are used. Parsed results are
-cached per filing (accession number) under data.sec_cache_dir.
+Point in time: only filings public at the cutoff are used. With a date cutoff that
+is filing_date <= as_of; with a minute cutoff (2026-10-07T11:20) a filing counts
+from the moment the SEC accepted it. Acceptance times come from the SEC filing
+index page ("Accepted", US Eastern): the bulk submissions API that EdgarTools
+reads reports them 4 hours late. Parsed results are cached per filing
+(accession number) under data.sec_cache_dir.
+
+Offline datasets: when <sec_cache_dir>/<SYMBOL>/filings.json exists (written by
+`qfii week build`), the filing list comes from it and nothing is downloaded.
 Needs `pip install qfii[sec]` (EdgarTools) and data.sec_user_agent, a contact
 identity the SEC requires on every request. Docling (`qfii[docling]`) is optional.
 """
@@ -21,9 +28,12 @@ import logging
 import math
 import re
 from collections import Counter
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from ..clock import ET, AsOf
 
 ITEM_LABELS = {
     "1.01": "entry into a material agreement", "1.02": "termination of a material agreement",
@@ -44,6 +54,43 @@ for _noisy in ("edgar", "httpx", "httpcore"):  # EdgarTools logs every request a
 
 class SecUnavailable(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class ManifestFiling:
+    """A filing listed in an offline dataset; its parsed content is in the cache."""
+    form: str
+    filing_date: date
+    accession_no: str
+    accepted: datetime | None = None
+
+    def obj(self) -> Any:
+        raise SecUnavailable(f"filing {self.accession_no} is not in the offline cache")
+
+
+ACCEPTED_RE = re.compile(r"Accepted</div>\s*<div class=\"info\">([^<]+)<")
+
+
+def parse_accepted(index_html: str) -> datetime | None:
+    """The 'Accepted' timestamp of an SEC filing index page (US Eastern)."""
+    m = ACCEPTED_RE.search(index_html)
+    if not m:
+        return None
+    try:
+        return datetime.fromisoformat(m.group(1).strip()).replace(tzinfo=ET)
+    except ValueError:
+        return None
+
+
+def visible(filing_date: date, accepted: datetime | None, cut: AsOf) -> bool:
+    """Was a filing public at the cutoff?"""
+    if filing_date > cut.day:
+        return False
+    if cut.at is None:
+        return True
+    if accepted is not None:
+        return cut.covers(accepted)
+    return filing_date < cut.day     # unknown time of day: count it from the next day
 
 
 # ---------------------------------------------------------------- text utilities
@@ -194,6 +241,8 @@ class SecSource:
         self._company = company_factory
         self._companies: dict[str, Any] = {}
         self._memo: dict[tuple, Any] = {}   # (kind, symbol, as_of) -> result, this process
+        self.identity = identity
+        self.fetch_index = None             # test hook: accession -> index page HTML
 
     # -------------------------------------------------- filing selection
     def company(self, symbol: str) -> Any:
@@ -204,25 +253,75 @@ class SecSource:
                 raise SecUnavailable(f"{symbol}: not an SEC filer ({exc})") from exc
         return self._companies[symbol]
 
-    def filings(self, symbol: str, form: str, as_of: date, limit: int = 1,
+    def manifest(self, symbol: str) -> list[ManifestFiling] | None:
+        path = self.cache_dir / symbol / "filings.json"
+        if not path.exists():
+            return None
+        rows = json.loads(path.read_text())["filings"]
+        return [ManifestFiling(r["form"], date.fromisoformat(r["filing_date"]), r["accession"],
+                               datetime.fromisoformat(r["accepted"]).replace(tzinfo=ET)
+                               if r.get("accepted") else None) for r in rows]
+
+    def filings(self, symbol: str, form: str, as_of: date | AsOf, limit: int = 1,
                 since: date | None = None) -> list[Any]:
-        """Most recent filings of `form` filed on or before as_of (newest first).
+        """Most recent filings of `form` public at the cutoff (newest first).
         Originals are preferred; amendments (e.g. 10-K/A, often only Part III) are
         used only when no original is available."""
-        listed = list(self.company(symbol).get_filings(form=form) or [])
+        cut = AsOf.parse(as_of)
+        listed = self.manifest(symbol)
+        if listed is None:
+            listed = list(self.company(symbol).get_filings(form=form) or [])
+        else:
+            listed = [f for f in listed if f.form.upper().split("/")[0] == form.upper()]
+            listed.sort(key=lambda f: f.filing_date, reverse=True)
         originals = [f for f in listed if str(getattr(f, "form", form)).upper() == form.upper()]
         out = []
         for f in originals or listed:
             filed = f.filing_date if isinstance(f.filing_date, date) else \
                 date.fromisoformat(str(f.filing_date)[:10])
-            if filed > as_of:
+            if filed > cut.day:
                 continue
             if since and filed < since:
                 break
+            if not visible(filed, self.accepted(symbol, f, cut), cut):
+                continue
             out.append(f)
             if len(out) >= limit:
                 break
         return out
+
+    def accepted(self, symbol: str, f: Any, cut: AsOf | None = None) -> datetime | None:
+        """When the SEC accepted the filing (US Eastern). Only looked up when it can
+        matter: a minute cutoff on, or the business day after, the filing date."""
+        if isinstance(f, ManifestFiling):
+            return f.accepted
+        filed = f.filing_date if isinstance(f.filing_date, date) else \
+            date.fromisoformat(str(f.filing_date)[:10])
+        if cut is not None and (cut.at is None or (cut.day - filed).days > 4):
+            return None
+        def lookup() -> dict[str, str | None]:
+            when = parse_accepted(self._index_page(f))
+            return {"accepted": when.isoformat() if when else None}
+
+        stamp = self._cached(symbol, f, "accepted", lookup)
+        return datetime.fromisoformat(stamp["accepted"]) if stamp.get("accepted") else None
+
+    def _index_page(self, f: Any) -> str:
+        if self.fetch_index is not None:
+            return self.fetch_index(f.accession_no)
+        import urllib.request
+
+        cik = str(int(f.accession_no.split("-")[0])) if not getattr(f, "cik", None) \
+            else str(int(f.cik))
+        acc = f.accession_no
+        url = (f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/"
+               f"{acc}-index.htm")
+        req = urllib.request.Request(url, headers={"User-Agent": self.identity})
+        try:
+            return urllib.request.urlopen(req, timeout=30).read().decode(errors="ignore")
+        except Exception as exc:  # noqa: BLE001 - unknown time: counted from the next day
+            log.info("no index page for %s: %s", acc, exc)
+            return ""
 
     # -------------------------------------------------- cache
     def _cached(self, symbol: str, filing: Any, kind: str, build) -> Any:
@@ -242,8 +341,8 @@ class SecSource:
             "accession": f.accession_no,
             "url": getattr(f, "homepage_url", None) or getattr(f, "url", None)})
 
-    def _memoized(self, kind: str, symbol: str, as_of: date, build) -> Any:
-        key = (kind, symbol, as_of)
+    def _memoized(self, kind: str, symbol: str, as_of: date | AsOf, build) -> Any:
+        key = (kind, symbol, AsOf.parse(as_of).iso())
         if key not in self._memo:
             self._memo[key] = build()
         return self._memo[key]
@@ -292,11 +391,11 @@ class SecSource:
             log.info("no prior-period statement for %s: %s", f.accession_no, exc)
         return out
 
-    def fundamentals(self, symbol: str, as_of: date) -> dict[str, Any]:
+    def fundamentals(self, symbol: str, as_of: date | AsOf) -> dict[str, Any]:
         return self._memoized("fundamentals", symbol, as_of,
                               lambda: self._fundamentals(symbol, as_of))
 
-    def _fundamentals(self, symbol: str, as_of: date) -> dict[str, Any]:
+    def _fundamentals(self, symbol: str, as_of: date | AsOf) -> dict[str, Any]:
         result: dict[str, Any] = {"available": False, "entity": None}
         for form, key in (("10-K", "annual"), ("10-Q", "quarterly")):
             found = self.filings(symbol, form, as_of)
@@ -347,11 +446,11 @@ class SecSource:
         return {"items": [{"code": i, "label": ITEM_LABELS.get(i, "other")} for i in items],
                 "headline": headline[:300], "text": text[:20000]}
 
-    def news(self, symbol: str, as_of: date, limit: int = 6) -> list[dict[str, Any]]:
+    def news(self, symbol: str, as_of: date | AsOf, limit: int = 6) -> list[dict[str, Any]]:
         return self._memoized("news", symbol, as_of, lambda: self._news(symbol, as_of, limit))
 
-    def _news(self, symbol: str, as_of: date, limit: int) -> list[dict[str, Any]]:
-        since = as_of - timedelta(days=self.news_lookback_days)
+    def _news(self, symbol: str, as_of: date | AsOf, limit: int) -> list[dict[str, Any]]:
+        since = AsOf.parse(as_of).day - timedelta(days=self.news_lookback_days)
         out = []
         for f in self.filings(symbol, "8-K", as_of, limit=limit, since=since):
             data = self._cached(symbol, f, "8k", lambda f=f: self._eight_k(f))
@@ -382,10 +481,10 @@ class SecSource:
             found.append(("management discussion and analysis", text))
         return [{"section": s, "text": c} for s, t in found for c in chunk(t)]
 
-    def passages(self, symbol: str, as_of: date) -> list[dict[str, Any]]:
+    def passages(self, symbol: str, as_of: date | AsOf) -> list[dict[str, Any]]:
         return self._memoized("passages", symbol, as_of, lambda: self._passages(symbol, as_of))
 
-    def _passages(self, symbol: str, as_of: date) -> list[dict[str, Any]]:
+    def _passages(self, symbol: str, as_of: date | AsOf) -> list[dict[str, Any]]:
         out = []
         for form in ("10-K", "10-Q"):
             for f in self.filings(symbol, form, as_of):
@@ -397,5 +496,6 @@ class SecSource:
                             "section": "press release", "text": c})
         return out
 
-    def search(self, symbol: str, as_of: date, query: str, k: int = 5) -> list[dict[str, Any]]:
+    def search(self, symbol: str, as_of: date | AsOf, query: str, k: int = 5
+               ) -> list[dict[str, Any]]:
         return bm25(self.passages(symbol, as_of), query, k)

@@ -3,11 +3,10 @@ these tools, so every number an agent cites came from deterministic code."""
 
 from __future__ import annotations
 
-from datetime import date
-
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError as McpToolError
 
+from ..clock import AsOf, CutoffError
 from ..config import Config
 from .fundamentals import fundamentals, load_facts
 from .indicators import benchmark_stats, compute_all
@@ -29,30 +28,34 @@ def _sec(cfg: Config, cache: dict):
     return cache["source"], cache.get("reason")
 
 
+def _cut(as_of: str) -> AsOf:
+    try:
+        return AsOf.parse(as_of)
+    except CutoffError as exc:
+        raise McpToolError(str(exc)) from exc
+
+
 def build_tool_server(cfg: Config) -> MCPServer:
     sec_cache: dict = {}
     server = MCPServer(
         "qfii-tools",
         instructions="Market data, technical indicators, benchmark comparison, macro "
                      "conditions, company fundamentals and data-quality checks for Qfii. All "
-                     "tools take an as_of date (YYYY-MM-DD) and never return data that was "
-                     "not public by then.",
+                     "tools take an as_of cutoff (YYYY-MM-DD, or YYYY-MM-DDTHH:MM US Eastern) "
+                     "and never return data that was not public by then.",
     )
 
     def _bars(symbol: str, as_of: str):
         # Errors become MCP ToolErrors: other exceptions reach the agent as a bare
         # "Error executing tool" with the reason hidden.
-        try:
-            day = date.fromisoformat(as_of)
-        except ValueError as exc:
-            raise McpToolError(f"as_of must be YYYY-MM-DD, got {as_of!r}") from exc
+        cut = _cut(as_of)
         sym = symbol.upper()
         try:
             if cfg.data_source == "csv":
                 from ..data_fetch import ensure_prices
 
-                ensure_prices(cfg.csv_dir, sym, day)
-            return load_prices(cfg.data_source, cfg.csv_dir, sym, day)
+                ensure_prices(cfg.csv_dir, sym, cut.day)
+            return load_prices(cfg.data_source, cfg.csv_dir, sym, cut, cfg.intraday_dir)
         except DataError as exc:
             raise McpToolError(str(exc)) from exc
 
@@ -80,7 +83,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
     def check_data_quality(symbol: str, as_of: str) -> dict:
         """Quality flags (stale, short sample, missing values, synthetic) for `symbol`."""
         bars = _bars(symbol, as_of)
-        flags = quality_flags(bars, date.fromisoformat(as_of), source=cfg.data_source,
+        flags = quality_flags(bars, _cut(as_of).day, source=cfg.data_source,
                               min_observations=cfg.min_observations,
                               stale_after_days=cfg.stale_after_days)
         return {"symbol": symbol.upper(), "as_of": as_of, "n": len(bars), "flags": flags}
@@ -102,7 +105,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
         earlier for rates, inflation, unemployment, credit spreads and volatility."""
         return {"as_of": as_of, "source": "FRED",
                 "series": macro_snapshot(cfg.macro_dir, list(cfg.macro_series),
-                                         date.fromisoformat(as_of))}
+                                         _cut(as_of).day)}
 
     @server.tool()
     def get_fundamentals(symbol: str, as_of: str) -> dict:
@@ -113,7 +116,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
         except DataError as exc:
             return {"symbol": symbol.upper(), "as_of": as_of, "available": False,
                     "reason": str(exc)}
-        out = fundamentals(facts, date.fromisoformat(as_of))
+        out = fundamentals(facts, _cut(as_of).day)
         return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR", **out}
 
     @server.tool()
@@ -138,7 +141,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
         if src is None:
             return {"symbol": symbol.upper(), "available": False, "reason": reason}
         try:
-            out = src.fundamentals(symbol.upper(), date.fromisoformat(as_of))
+            out = src.fundamentals(symbol.upper(), _cut(as_of))
         except Exception as exc:  # noqa: BLE001 - SEC/network errors become a data gap
             return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300]}
         return {"symbol": symbol.upper(), "as_of": as_of, "source": "SEC EDGAR (XBRL)", **out}
@@ -151,7 +154,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
         if src is None:
             return {"symbol": symbol.upper(), "available": False, "reason": reason, "news": []}
         try:
-            news = src.news(symbol.upper(), date.fromisoformat(as_of))
+            news = src.news(symbol.upper(), _cut(as_of))
         except Exception as exc:  # noqa: BLE001
             return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300],
                     "news": []}
@@ -167,7 +170,7 @@ def build_tool_server(cfg: Config) -> MCPServer:
         if src is None:
             return {"symbol": symbol.upper(), "available": False, "reason": reason, "hits": []}
         try:
-            hits = src.search(symbol.upper(), date.fromisoformat(as_of), query, k)
+            hits = src.search(symbol.upper(), _cut(as_of), query, k)
         except Exception as exc:  # noqa: BLE001
             return {"symbol": symbol.upper(), "available": False, "reason": str(exc)[:300],
                     "hits": []}
