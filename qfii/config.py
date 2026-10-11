@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
+from datetime import date
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -83,6 +84,21 @@ class Portfolio:
 
 
 @dataclass(frozen=True)
+class Week:
+    """The bottom-up replay: a fixed set of stocks researched every few minutes."""
+    start: date
+    end: date
+    symbols: int
+    seed: int
+    cadence_minutes: int
+    dataset_dir: Path
+    raw_dir: Path
+    gb_per_day: float
+    price_move_pct: float
+    debate_once_per_day: bool
+
+
+@dataclass(frozen=True)
 class Config:
     scheduler: SchedulerSettings
     db_path: Path
@@ -110,6 +126,7 @@ class Config:
     max_tool_turns: int
     limits: Limits
     execution_mode: str
+    week: Week
 
     def model_for(self, agent: str) -> ModelSpec:
         return self.models[self.agents[agent].tier]
@@ -296,12 +313,57 @@ def _build(raw: dict[str, Any]) -> Config:
         portfolio=_portfolio(raw["portfolio"]),
         limits=limits,
         execution_mode=mode,
+        week=_week(raw["week"]),
     )
+
+
+def _week(raw: dict[str, Any]) -> Week:
+    try:
+        start, end = date.fromisoformat(str(raw["start"])), date.fromisoformat(str(raw["end"]))
+    except ValueError as exc:
+        raise ConfigError(f"week.start / week.end must be YYYY-MM-DD: {exc}") from exc
+    if end < start:
+        raise ConfigError("week.end is before week.start")
+    if not isinstance(raw["debate_once_per_day"], bool):
+        raise ConfigError("week.debate_once_per_day must be true or false")
+    return Week(
+        start=start, end=end,
+        symbols=int(_number(raw, "symbols", "week", lo=1, hi=100, integer=True)),
+        seed=int(_number(raw, "seed", "week", lo=0, integer=True)),
+        cadence_minutes=int(_number(raw, "cadence_minutes", "week", lo=5, hi=390,
+                                    integer=True)),
+        dataset_dir=Path(raw["dataset_dir"]), raw_dir=Path(raw["raw_dir"]),
+        gb_per_day=float(_number(raw, "gb_per_day", "week", lo=0.01, hi=100)),
+        price_move_pct=float(_number(raw, "price_move_pct", "week", lo=0, hi=100)),
+        debate_once_per_day=raw["debate_once_per_day"],
+    )
+
+
+def _load_file(path: Path, seen: tuple[Path, ...] = ()) -> dict[str, Any]:
+    """A config file; `extends = "other.toml"` (relative to this file) loads that
+    one first and applies this file on top."""
+    path = path.resolve()
+    if path in seen:
+        raise ConfigError(f"config files extend each other in a loop: {path}")
+    with open(path, "rb") as fh:
+        data = tomllib.load(fh)
+    parent = data.pop("extends", None)
+    if parent is None:
+        return data
+    return _overlay(_load_file(path.parent / parent, (*seen, path)), data)
+
+
+def _overlay(base: dict[str, Any], top: dict[str, Any]) -> dict[str, Any]:
+    """Nested dict merge, no validation (load_config validates the result)."""
+    out = dict(base)
+    for key, value in top.items():
+        out[key] = _overlay(out[key], value) if isinstance(value, dict) and \
+            isinstance(out.get(key), dict) else value
+    return out
 
 
 def load_config(path: str | Path | None = None) -> Config:
     raw = _defaults()
     if path is not None:
-        with open(path, "rb") as fh:
-            raw = _merge(raw, tomllib.load(fh))
+        raw = _merge(raw, _load_file(Path(path)))
     return _build(raw)

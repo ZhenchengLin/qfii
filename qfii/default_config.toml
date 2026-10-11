@@ -201,3 +201,23 @@ daily_order_cap = 5
 
 [execution]
 mode = "paper"
+
+# Bottom-up week replay (`qfii week build`, `qfii week run`): `symbols` stocks
+# drawn at random (fixed seed) from the Nasdaq-100 are researched every
+# `cadence_minutes` of market time from `start` to `end`. Research rewrites a
+# report only on new information: a new filing or 8-K, a price move of
+# price_move_pct since its last report, or a question from Assessment. A stock
+# that passes Assessment is debated at most once a day, plus again when a new
+# filing or 8-K arrives (debate_once_per_day). gb_per_day caps what the
+# dataset and the run may write per market day.
+[week]
+start = "2026-10-05"
+end = "2026-10-09"
+symbols = 10
+seed = 20261005
+cadence_minutes = 10
+dataset_dir = "data/week"
+raw_dir = "data/raw"
+gb_per_day = 1.0
+price_move_pct = 2.0
+debate_once_per_day = true

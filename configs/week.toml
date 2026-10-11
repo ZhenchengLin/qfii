@@ -1,0 +1,11 @@
+# Bottom-up week replay in the Outshift lab, on the offline dataset built by
+# `qfii week build` (prices, 10-minute bars, macro and SEC filings all read from
+# data/week, so the replay needs no network for data; the models still do).
+extends = "outshift-lab.toml"
+
+[data]
+source = "csv"
+csv_dir = "data/week/prices"
+intraday_dir = "data/week/intraday"
+macro_dir = "data/week/macro"
+sec_cache_dir = "data/week/sec"

@@ -159,6 +159,34 @@ def bm25(passages: list[dict[str, Any]], query: str, k: int = 5,
     return [{**p, "score": round(s, 3)} for s, p in scored[:k]]
 
 
+_BOILERPLATE = ("securities and exchange commission", "united states", "form 8-k",
+                "washington, d.c.", "current report", "exhibit", "press release")
+_COVER_PAGE = ("pursuant to section", "date of report", "date of earliest event", "contact:",
+               "for immediate release", "commission file number", "(exact name of",
+               "jurisdiction of incorporation", "i.r.s. employer")
+
+
+def headline(text: str) -> str:
+    """The first line that reads like a sentence: skips logos and image names,
+    markdown tables and comments, and the SEC cover-page boilerplate. The 8-K form
+    itself (no press release attached) has no headline: callers fall back to the
+    item labels."""
+    if "securities exchange act of 1934" in " ".join(text.split())[:2500].lower():
+        return ""
+    for raw in text.splitlines():
+        line = raw.strip(" #*_>-").replace("\\_", "_")
+        low = line.lower()
+        if len(line) < 25 or line.startswith(("|", "<", "!", "[")):
+            continue
+        if re.search(r"\.(jpe?g|png|gif|svg)\b", low) or low.startswith(_BOILERPLATE) \
+                or any(m in low for m in _COVER_PAGE):
+            continue
+        if sum(c.islower() for c in line) < len(line) * 0.3 or len(line.split()) < 4:
+            continue
+        return line[:300]
+    return ""
+
+
 def html_to_text(html: str) -> str:
     """Docling when installed (keeps tables), otherwise a plain tag strip."""
     try:
@@ -407,7 +435,7 @@ class SecSource:
                                    lambda f=f: self._statement_metrics(f))
             result[key] = {**self._meta(symbol, f), "metrics": metrics}
             result["available"] = True
-        result["entity"] = getattr(self.company(symbol), "name", symbol)
+        result["entity"] = self.entity(symbol)
         derived: dict[str, float] = {}
         for key in ("annual", "quarterly"):
             m = (result.get(key) or {}).get("metrics") or {}
@@ -442,9 +470,8 @@ class SecSource:
                 text = obj.text() if callable(getattr(obj, "text", None)) else ""
             except Exception:  # noqa: BLE001
                 text = ""
-        headline = next((ln.strip(" #*") for ln in text.splitlines() if len(ln.strip()) > 20), "")
         return {"items": [{"code": i, "label": ITEM_LABELS.get(i, "other")} for i in items],
-                "headline": headline[:300], "text": text[:20000]}
+                "headline": headline(text), "text": text[:20000]}
 
     def news(self, symbol: str, as_of: date | AsOf, limit: int = 6) -> list[dict[str, Any]]:
         return self._memoized("news", symbol, as_of, lambda: self._news(symbol, as_of, limit))
@@ -457,8 +484,15 @@ class SecSource:
             codes = {i["code"] for i in data["items"]}
             if codes <= {"9.01"}:
                 continue  # exhibits only, nothing new
-            out.append({**self._meta(symbol, f), **data})
+            out.append({**self._meta(symbol, f), **data,
+                        "headline": headline(data["text"]) or data["headline"]})
         return out
+
+    def entity(self, symbol: str) -> str:
+        path = self.cache_dir / symbol / "filings.json"
+        if path.exists():
+            return json.loads(path.read_text()).get("entity") or symbol
+        return getattr(self.company(symbol), "name", symbol)
 
     # -------------------------------------------------- passages + search
     def _sections(self, f: Any) -> list[dict[str, Any]]:

@@ -236,6 +236,39 @@ def _cmd_eval(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_week(cfg: Config, args: argparse.Namespace) -> int:
+    from .week import dataset
+
+    if args.action == "build":
+        manifest = dataset.build(cfg, download=not args.no_download)
+        st = manifest["storage"]
+        print(f"\nbuilt {cfg.week.dataset_dir}: {', '.join(manifest['symbols'])}")
+        print(f"size: {st['total_bytes'] / 1e6:,.1f} MB total, "
+              f"{st['bytes_per_market_day'] / 1e6:,.1f} MB per market day "
+              f"(limit {cfg.week.gb_per_day} GB)")
+        for sym, rows in manifest["filings_during_week"].items():
+            for r in rows:
+                print(f"  {sym} {r['form']} accepted {r['accepted']} ET")
+        return 0
+    if args.action == "check":
+        from .clock import trading_slots
+
+        slots = trading_slots(cfg.week.start, cfg.week.end, cfg.week.cadence_minutes)
+        problems = dataset.check(cfg, slots[::13])
+        print("\n".join(problems) or f"dataset OK: {cfg.week.dataset_dir}")
+        return 1 if problems else 0
+    if args.action == "pack":
+        import tarfile
+
+        out = cfg.week.dataset_dir.with_suffix(".tar.gz")
+        with tarfile.open(out, "w:gz") as tar:
+            tar.add(cfg.week.dataset_dir, arcname=cfg.week.dataset_dir.name)
+        print(f"{out} ({out.stat().st_size / 1e6:,.1f} MB): upload it, then "
+              f"`tar xzf {out.name} -C {cfg.week.dataset_dir.parent}`")
+        return 0
+    raise SystemExit(f"unknown week action {args.action}")
+
+
 def _cmd_bench(cfg: Config, args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -504,6 +537,11 @@ def main(argv: list[str] | None = None) -> int:
                    help="no new debates: re-measure the last N debated papers from the "
                         "database, with what-if rule variants")
 
+    p = sub.add_parser("week", help="bottom-up week replay: build the dataset, then run it")
+    p.add_argument("action", choices=["build", "check", "pack"])
+    p.add_argument("--no-download", action="store_true",
+                   help="build only from raw files already saved under week.raw_dir")
+
     p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
     p.add_argument("symbol")
     p.add_argument("--as-of", type=date.fromisoformat)
@@ -561,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
-                "schemas": _cmd_schemas, "bench": _cmd_bench, "eval": _cmd_eval, "risk-check": _cmd_ask_team,
+                "schemas": _cmd_schemas, "bench": _cmd_bench, "week": _cmd_week, "eval": _cmd_eval, "risk-check": _cmd_ask_team,
                 "ask-team": _cmd_ask_team,
                 "ui": _cmd_ui,
                 "serve": _cmd_serve, "ask": _cmd_ask}

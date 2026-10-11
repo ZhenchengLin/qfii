@@ -53,7 +53,12 @@ def fetch_yahoo_prices(http: httpx.Client, symbol: str, range_: str = "5y") -> l
             raise FetchError(f"{symbol} not found on Yahoo Finance (wrong or delisted "
                              f"ticker?)") from exc
         raise
-    chart = resp.json().get("chart", {})
+    return parse_yahoo_daily(resp.json(), symbol)
+
+
+def parse_yahoo_daily(payload: dict, symbol: str) -> list[Bar]:
+    """Daily bars from a Yahoo chart response (also used on saved raw downloads)."""
+    chart = payload.get("chart", {})
     if chart.get("error") or not chart.get("result"):
         raise FetchError(f"{symbol}: {chart.get('error') or 'no data'}")
     result = chart["result"][0]
