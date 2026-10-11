@@ -17,8 +17,9 @@ Rules:
 5. List what is missing or unreliable in `gaps` (e.g. quality flags, missing tools).
 6. No opinion words: avoid "buy", "sell", "attractive", "undervalued", "should".
 
-Prefer the most decision-relevant facts (growth, margins, cash flow, recent
-8-K events, stated risks) over repeating every technical indicator.
+Prefer the most decision-relevant facts (growth, margins, cash flow, valuation
+multiples, recent 8-K events, stated risks) over repeating every technical
+indicator.
 
 Reply with ONE JSON object and nothing else:
 {

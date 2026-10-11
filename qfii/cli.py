@@ -136,6 +136,45 @@ def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_risk_check(cfg: Config, args: argparse.Namespace) -> int:
+    """Ask Risk & Validation directly: research -> proposal -> risk review."""
+    from .agents.research.agent import ResearchAgent
+    from .agents.structured import AgentFailed
+    from .agents.teams.agents import AssessmentAgent, RiskAgent
+    from .contracts import ResearchRequest
+    from .portfolio import snapshot
+
+    async def run() -> int:
+        conn = connect(cfg.db_path)
+        init_db(conn, cfg.limits.starting_cash_usd)
+        as_of = args.as_of or date.today()
+        packet, _ = await ResearchAgent(cfg).run(ResearchRequest(symbol=args.symbol,
+                                                                 as_of=as_of))
+        portfolio = snapshot(conn, cfg, as_of).model_dump(mode="json")
+        proposal = await AssessmentAgent(cfg).propose(packet, portfolio)
+        print(f"proposal: {proposal.verdict}, {proposal.suggested_position_pct}% | "
+              f"{proposal.thesis[:200]}")
+        risk = RiskAgent(cfg)
+        try:
+            report = await risk.review(packet, portfolio, proposal, args.question)
+        except AgentFailed as exc:
+            print(f"RISK REPORT FAILED: {exc}", file=sys.stderr)
+            return 1
+        print(f"risk evidence collected: {len(risk.evidence)} items "
+              f"({sum(e.payload.get('name') == 'filing_passage' for e in risk.evidence)} "
+              f"filing passages)")
+        for a in report.answers:
+            print(f"  answer{' [data gap]' if a.data_gap else ''}: {a.claim}")
+        for f in report.findings:
+            print(f"  [{f.severity}]{' [data gap]' if f.data_gap else ''} {f.issue}")
+        for c in report.assumption_checks:
+            mark = {True: "holds", False: "FAILS", None: "unknown"}[c.holds]
+            print(f"  assumption {mark}: {c.assumption[:150]}")
+        return 0
+
+    return asyncio.run(run())
+
+
 def _cmd_bench(cfg: Config, args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -381,6 +420,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--as-of", type=date.fromisoformat, help="information cutoff YYYY-MM-DD")
     p.add_argument("--save", action="store_true", help="store packet, debate and memories")
 
+    p = sub.add_parser("risk-check", help="ask Risk & Validation directly about a stock")
+    p.add_argument("symbol")
+    p.add_argument("--question", action="append", required=True,
+                   help="what Risk should check (repeatable)")
+    p.add_argument("--as-of", type=date.fromisoformat)
+
     p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
     p.add_argument("symbol")
     p.add_argument("--as-of", type=date.fromisoformat)
@@ -438,7 +483,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
-                "schemas": _cmd_schemas, "bench": _cmd_bench,
+                "schemas": _cmd_schemas, "bench": _cmd_bench, "risk-check": _cmd_risk_check,
                 "ui": _cmd_ui,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
