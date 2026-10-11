@@ -6,3 +6,4 @@ __pycache__/
 data/
 *.db
 config.local.toml
+.DS_Store

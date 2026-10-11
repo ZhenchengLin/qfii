@@ -15,7 +15,7 @@ import json
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 import httpx
@@ -193,18 +193,20 @@ class OpenAICompatLLM(_Priced):
     async def complete(self, system: str, user: str,
                        schema: dict[str, Any] | None = None) -> LLMResult:
         headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
-        fmt: dict[str, Any] = {"type": "json_object"}
-        if schema is not None:
-            fmt = {"type": "json_schema", "json_schema": {"name": "reply", "schema": schema}}
-        body = {"model": self.model, "temperature": self.temperature, "response_format": fmt,
-                "max_tokens": self.max_output_tokens,
-                "messages": _messages(system, user, self.merge_system)}
         client = self._http or httpx.AsyncClient(timeout=self._timeout)
         try:
-            resp = await client.post(f"{self.base_url}/chat/completions", json=body,
-                                     headers=headers)
-        except httpx.HTTPError as exc:
-            raise LLMError(f"{self.base_url}: {exc!r}") from exc
+            # Newer models reject some parameters (temperature, max_tokens, json_schema).
+            # Drop whatever the server names in a 400 and try again; remember it.
+            for _ in range(4):
+                body = self._body(system, user, schema)
+                try:
+                    resp = await client.post(f"{self.base_url}/chat/completions", json=body,
+                                             headers=headers)
+                except httpx.HTTPError as exc:
+                    raise LLMError(f"{self.base_url}: {exc!r}") from exc
+                if resp.status_code == 400 and self._adapt(resp.text):
+                    continue
+                break
         finally:
             if self._http is None:
                 await client.aclose()
@@ -212,7 +214,7 @@ class OpenAICompatLLM(_Priced):
             raise LLMError(f"{self.base_url}: HTTP {resp.status_code}: {resp.text[:300]}")
         data = resp.json()
         try:
-            text = data["choices"][0]["message"]["content"]
+            text = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"unexpected response shape: {str(data)[:300]}") from exc
         usage = data.get("usage") or {}
@@ -220,6 +222,32 @@ class OpenAICompatLLM(_Priced):
         ct = int(usage.get("completion_tokens") or _approx_tokens(text))
         text, thinking = split_thinking(text)
         return LLMResult(text, self.provider, self.model, pt, ct, self._cost(pt, ct), thinking)
+
+    _unsupported: set[str]
+
+    def _body(self, system: str, user: str, schema: dict[str, Any] | None) -> dict[str, Any]:
+        drop = getattr(self, "_unsupported", set())
+        body: dict[str, Any] = {"model": self.model,
+                                "messages": _messages(system, user, self.merge_system)}
+        if "temperature" not in drop:
+            body["temperature"] = self.temperature
+        token_key = "max_completion_tokens" if "max_tokens" in drop else "max_tokens"
+        body[token_key] = self.max_output_tokens
+        if schema is not None and "json_schema" not in drop:
+            body["response_format"] = {"type": "json_schema",
+                                       "json_schema": {"name": "reply", "schema": schema}}
+        elif "response_format" not in drop:
+            body["response_format"] = {"type": "json_object"}
+        return body
+
+    def _adapt(self, error_text: str) -> bool:
+        drop = self.__dict__.setdefault("_unsupported", set())
+        text = error_text.lower()
+        for param in ("temperature", "max_tokens", "json_schema", "response_format"):
+            if param in text and param not in drop:
+                drop.add(param)
+                return True
+        return False
 
 
 class ScheduledLLM:
@@ -253,7 +281,20 @@ class ScheduledLLM:
             object.__setattr__(self, name, value)
 
 
+def resolve_env(value: str) -> str:
+    """Config values like "env:LLM_MODEL" are read from the environment, so lab or
+    cloud settings never have to be written into a config file."""
+    if value.startswith("env:"):
+        name = value[4:]
+        resolved = os.environ.get(name)
+        if not resolved:
+            raise LLMError(f"environment variable {name} is not set")
+        return resolved
+    return value
+
+
 def build_llm(spec: ModelSpec, fake_responder: Callable[[str, str], str]) -> Any:
+    spec = replace(spec, model=resolve_env(spec.model), base_url=resolve_env(spec.base_url))
     if spec.provider == "fake":
         llm: Any = FakeLLM(fake_responder, spec.model)
     elif spec.provider == "ollama":

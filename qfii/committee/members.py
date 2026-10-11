@@ -4,6 +4,7 @@ model tier, and each sees only its own memory."""
 from __future__ import annotations
 
 import json
+import time
 from importlib import resources
 from typing import Any
 
@@ -49,19 +50,28 @@ class LLMMember:
         self.system = PROTOCOL
         self.persona = _PROMPTS.joinpath(f"{name}.md").read_text()
         self.calls: list[dict[str, Any]] = []
+        self.ballot_log: list[dict[str, Any]] = []   # per ballot: round, attempts, valid
 
     async def deliberate(self, view: DebateView) -> Ballot:
         feedback = None
+        entry: dict[str, Any] = {"round": view.round, "attempts": [], "valid": False}
+        self.ballot_log.append(entry)
         for _ in range(MAX_ATTEMPTS):
             user = member_prompt(view, self.persona, feedback)
+            started = time.monotonic()
             try:
                 result = await self.llm.complete(self.system, user, BALLOT_SCHEMA)
             except LLMError as exc:
-                self.calls.append(failed_call(self.llm, str(exc)))
+                call = failed_call(self.llm, str(exc))
+                call["seconds"] = round(time.monotonic() - started, 2)
+                self.calls.append(call)
+                entry["attempts"].append(call)
                 feedback = str(exc)
                 continue
             call = result.record()
+            call["seconds"] = round(time.monotonic() - started, 2)
             self.calls.append(call)
+            entry["attempts"].append(call)
             try:
                 data = parse_json_object(result.text)
                 data["member"] = self.name  # a member cannot vote as someone else
@@ -70,6 +80,7 @@ class LLMMember:
                 if cap is not None and ballot.size_usd and ballot.size_usd > cap:
                     raise ValueError(f"size_usd {ballot.size_usd:,.0f} exceeds "
                                      f"largest_allowed_order_usd {cap:,.0f}")
+                entry["valid"] = True
                 return ballot
             except (ValueError, ValidationError) as exc:
                 call.update(ok=False, error=f"invalid ballot: {exc}"[:500])

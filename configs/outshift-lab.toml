@@ -1,0 +1,35 @@
+# Outshift AGNTCY lab: the lab's hosted model (LiteLLM proxy) for every tier.
+# Values come from the lab's environment, so no key is written anywhere:
+#   LLM_MODEL, LLM_BASE_URL, LLM_API_KEY
+# The lab has no GPU (8 vCPU, 15 GB RAM, ~8 GB free disk): no local models.
+
+[data]
+source = "csv"
+
+[models.mid]
+provider = "openai_compat"
+model = "env:LLM_MODEL"
+base_url = "env:LLM_BASE_URL"
+api_key_env = "LLM_API_KEY"
+num_ctx = 128000
+max_output_tokens = 4096
+
+[models.strong]
+provider = "openai_compat"
+model = "env:LLM_MODEL"
+base_url = "env:LLM_BASE_URL"
+api_key_env = "LLM_API_KEY"
+num_ctx = 128000
+max_output_tokens = 4096
+
+[models.strongest]
+provider = "openai_compat"
+model = "env:LLM_MODEL"
+base_url = "env:LLM_BASE_URL"
+api_key_env = "LLM_API_KEY"
+num_ctx = 128000
+max_output_tokens = 6144
+
+[runtime]
+exclusive_models = false
+max_concurrent_calls = 3

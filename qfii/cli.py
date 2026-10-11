@@ -120,6 +120,28 @@ def _cmd_debate(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_bench(cfg: Config, args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .bench import bench_debate, format_table, save_report
+
+    as_of = args.as_of or date.today()
+    reports = []
+    for i in range(args.runs):
+        print(f"run {i + 1}/{args.runs}: {args.symbol} as of {as_of}", flush=True)
+        report = asyncio.run(bench_debate(cfg, args.symbol.upper(), as_of,
+                                          _print_round if args.verbose else None))
+        path = save_report(report, Path(args.out), args.label or "bench")
+        print(f"  saved {path}", flush=True)
+        reports.append(report)
+    print()
+    print(format_table(reports))
+    for r in reports:
+        for err in r["errors"]:
+            print(f"  error seen: {err}")
+    return 0
+
+
 def _cmd_data(cfg: Config, args: argparse.Namespace) -> int:
     import httpx
 
@@ -333,6 +355,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--as-of", type=date.fromisoformat, help="information cutoff YYYY-MM-DD")
     p.add_argument("--save", action="store_true", help="store packet, debate and memories")
 
+    p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
+    p.add_argument("symbol")
+    p.add_argument("--as-of", type=date.fromisoformat)
+    p.add_argument("--runs", type=int, default=1)
+    p.add_argument("--label", help="report file prefix, e.g. luna or qwen27b")
+    p.add_argument("--out", default="data/bench")
+    p.add_argument("--verbose", action="store_true", help="print each round")
+
     p = sub.add_parser("data", help="download market data into local files")
     p.add_argument("action", choices=["fetch"])
     p.add_argument("--symbols", nargs="*", default=[],
@@ -378,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
-                "schemas": _cmd_schemas,
+                "schemas": _cmd_schemas, "bench": _cmd_bench,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)

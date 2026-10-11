@@ -50,3 +50,37 @@ def test_make_llm_requires_key_env(tmp_path, monkeypatch):
         make_llm(cfg, "research", lambda s, u: "")
     monkeypatch.setenv("QFII_TEST_KEY", "secret")
     assert make_llm(cfg, "research", lambda s, u: "").model == "m"
+
+
+async def test_openai_compat_drops_parameters_the_server_rejects():
+    bodies = []
+
+    def handler(req):
+        body = json.loads(req.content)
+        bodies.append(body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": "Unsupported value: 'temperature'"})
+        if "max_tokens" in body:
+            return httpx.Response(400, json={"error": "Use 'max_completion_tokens' instead "
+                                                      "of 'max_tokens'"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatLLM("http://x/v1", "m", http_client=http)
+    assert (await llm.complete("s", "u")).text == "{}"
+    assert len(bodies) == 3 and "max_completion_tokens" in bodies[-1]
+    await llm.complete("s", "u")  # remembered: one request
+    assert len(bodies) == 4
+
+
+def test_env_values_resolved(monkeypatch):
+    from qfii.config import ModelSpec
+    from qfii.llm import build_llm
+
+    monkeypatch.setenv("QFII_TEST_MODEL", "azure/some-model")
+    monkeypatch.setenv("QFII_TEST_URL", "https://proxy.example")
+    llm = build_llm(ModelSpec("openai_compat", "env:QFII_TEST_MODEL", "env:QFII_TEST_URL"), None)
+    assert (llm.model, llm.base_url) == ("azure/some-model", "https://proxy.example")
+    monkeypatch.delenv("QFII_TEST_MODEL")
+    with pytest.raises(LLMError, match="QFII_TEST_MODEL"):
+        build_llm(ModelSpec("openai_compat", "env:QFII_TEST_MODEL", "x"), None)
