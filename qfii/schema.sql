@@ -145,6 +145,7 @@ CREATE TABLE ballots (
     created_at      TEXT NOT NULL,
     amendment_id    TEXT,            -- propose: the id it received; support: the id backed
     amendment_json  TEXT,            -- propose: the proposed terms
+    changed_because TEXT,            -- why the member changed position (anti-herding audit)
     UNIQUE (debate_id, round, member),
     CHECK (action NOT IN ('invest', 'replace') OR size_usd IS NOT NULL),
     CHECK (action <> 'replace' OR replace_symbol IS NOT NULL),

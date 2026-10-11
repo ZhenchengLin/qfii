@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # Upgrades for databases created by an older version:
 #   {target version: (table the step rewrites, or None; SQL)} or a list of such steps.
@@ -78,6 +78,7 @@ DROP TABLE ballots_v3;
 ALTER TABLE decisions ADD COLUMN amendment_id TEXT;
 ALTER TABLE decisions ADD COLUMN terms_json TEXT;
 """)],
+    5: ("ballots", "ALTER TABLE ballots ADD COLUMN changed_because TEXT;"),
 }
 
 

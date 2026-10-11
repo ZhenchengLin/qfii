@@ -106,10 +106,11 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
                 conn.execute(
                     "INSERT INTO ballots (debate_id, round, member, action, size_usd, "
                     "replace_symbol, target, request, argument, created_at, amendment_id, "
-                    "amendment_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "amendment_json, changed_because) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (debate_id, rec.round, b.member, b.action, b.size_usd, b.replace_symbol,
                      b.target, b.request, b.argument, now, b.amendment_id,
-                     b.amendment.model_dump_json(exclude_none=True) if b.amendment else None),
+                     b.amendment.model_dump_json(exclude_none=True) if b.amendment else None,
+                     b.changed_because),
                 )
             for rep in rec.reports:
                 conn.execute(

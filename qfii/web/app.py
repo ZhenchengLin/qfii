@@ -104,14 +104,15 @@ class DebateServer:
         rounds: dict[int, dict[str, Any]] = {}
         amendments: dict[str, dict[str, Any]] = {}
         for (rnd, member, action, size_usd, repl, target, request, argument, aid,
-             ajson) in self.conn.execute(
+             ajson, changed) in self.conn.execute(
                 "SELECT round, member, action, size_usd, replace_symbol, target, request, "
-                "argument, amendment_id, amendment_json FROM ballots WHERE debate_id = ? "
-                "ORDER BY round, id", (did,)):
+                "argument, amendment_id, amendment_json, changed_because FROM ballots "
+                "WHERE debate_id = ? ORDER BY round, id", (did,)):
             ballot = {"member": member, "action": action, "argument": argument}
             ballot.update({k: v for k, v in (("size_usd", size_usd), ("replace_symbol", repl),
                                              ("target", target), ("request", request),
-                                             ("amendment_id", aid)) if v})
+                                             ("amendment_id", aid),
+                                             ("changed_because", changed)) if v})
             if ajson:
                 ballot["amendment"] = json.loads(ajson)
                 amendments[aid] = {**ballot["amendment"], "proposed_by": member,
