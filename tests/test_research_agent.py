@@ -66,7 +66,7 @@ async def test_llm_outage_fails_cleanly(cfg):
     class Down:
         provider, model = "openai_compat", "x"
 
-        async def complete(self, system, user):
+        async def complete(self, system, user, schema=None):
             raise LLMError("connection refused")
 
     with pytest.raises(ResearchFailed, match="connection refused"):

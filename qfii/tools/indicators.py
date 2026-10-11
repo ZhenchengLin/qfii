@@ -70,6 +70,22 @@ INDICATORS = {
 }
 
 
+LABELS = {
+    "return_1m": "1-month price return (21 trading days)",
+    "return_3m": "3-month price return (63 trading days)",
+    "return_12m": "12-month price return (252 trading days)",
+    "sma_50": "50-day simple moving average of close",
+    "sma_200": "200-day simple moving average of close",
+    "volatility_3m_ann": "annualized volatility of daily log returns, last 63 trading days",
+    "rsi_14": "14-day RSI (Wilder)",
+    "max_drawdown_12m": "maximum peak-to-trough drawdown, last 252 trading days",
+    "excess_return_3m": "3-month return minus benchmark 3-month return",
+    "excess_return_12m": "12-month return minus benchmark 12-month return",
+    "beta_12m": "beta of daily log returns vs benchmark, last 252 trading days",
+    "correlation_12m": "correlation of daily log returns with benchmark, last 252 trading days",
+}
+
+
 def compute_all(closes: list[float]) -> dict[str, dict]:
     out = {}
     for name, (fn, window) in INDICATORS.items():

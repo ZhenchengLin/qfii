@@ -10,12 +10,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..config import COMMITTEE, Config
-from ..contracts import Ballot
+from ..contracts import Ballot, ballot_reply_schema
 from ..llm import LLM, LLMError, failed_call, make_llm, parse_json_object
 from .engine import DebateView
 from .fake import fake_member_responder
 
 _PROMPTS = resources.files("qfii.committee").joinpath("prompts")
+BALLOT_SCHEMA = ballot_reply_schema()
 
 
 def system_prompt(member: str) -> str:
@@ -33,9 +34,9 @@ class LLMMember:
         self.calls: list[dict[str, Any]] = []
 
     async def deliberate(self, view: DebateView) -> Ballot:
-        user = json.dumps(view.as_prompt_dict(), indent=1, default=str)
+        user = json.dumps(view.as_prompt_dict(), separators=(",", ":"), default=str)
         try:
-            result = await self.llm.complete(self.system, user)
+            result = await self.llm.complete(self.system, user, BALLOT_SCHEMA)
         except LLMError as exc:
             self.calls.append(failed_call(self.llm, str(exc)))
             raise

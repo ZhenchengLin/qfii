@@ -262,6 +262,9 @@ def _cmd_ask(cfg: Config, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import logging
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(prog="qfii")
     parser.add_argument("--version", action="version", version=f"qfii {__version__}")
     parser.add_argument("--config", help="local TOML overriding the packaged defaults")

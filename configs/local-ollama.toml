@@ -1,0 +1,35 @@
+# Team setup (Zhen, 2026-10-10): three local models through Ollama, one loaded
+# at a time. Pull them first:
+#   ollama pull qwen3.5:27b      # max tier: neutral member      (~17 GB at Q4)
+#   ollama pull deepseek-r1:14b  # high tier: assessment, risk, aggressive, conservative (~9 GB)
+#   ollama pull qwen3.5:9b       # mid tier: research            (~6.6 GB)
+# Memory: the 27B needs a machine with more than 16 GB of GPU-usable memory
+# (e.g. a Brev GPU, or a 32 GB+ Mac). On a 16 GB Mac use configs/dev-ollama.toml.
+# On a GPU with ~40 GB+ you can hold all three: set exclusive_models = false.
+
+[data]
+source = "csv"
+
+[models.mid]
+provider = "ollama"
+model = "qwen3.5:9b"
+num_ctx = 16384
+think = false            # facts only: no need to think, keeps research cheap
+
+[models.strong]
+provider = "ollama"
+model = "deepseek-r1:14b"
+num_ctx = 24576
+think = true             # R1 always reasons; Ollama returns it separately
+temperature = 0.6        # DeepSeek's recommended setting for R1 distills
+merge_system_prompt = true
+
+[models.strongest]
+provider = "ollama"
+model = "qwen3.5:27b"
+num_ctx = 32768
+think = true
+
+[runtime]
+exclusive_models = true
+max_concurrent_calls = 1

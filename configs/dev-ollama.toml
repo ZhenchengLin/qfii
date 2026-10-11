@@ -1,0 +1,23 @@
+# 16 GB Mac development: every tier on the installed qwen3.5:9b (one load, no
+# swaps). Swap in configs/local-ollama.toml on bigger hardware.
+
+[data]
+source = "csv"
+
+[models.mid]
+provider = "ollama"
+model = "qwen3.5:9b"
+num_ctx = 16384
+think = false
+
+[models.strong]
+provider = "ollama"
+model = "qwen3.5:9b"
+num_ctx = 24576
+think = true
+
+[models.strongest]
+provider = "ollama"
+model = "qwen3.5:9b"
+num_ctx = 24576
+think = true

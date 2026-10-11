@@ -42,7 +42,7 @@ def fake_research_responder(system: str, user: str) -> str:
         elif name in _MONEY:
             text = (f"{name.replace('_', ' ').capitalize()} was ${v / 1e9:,.2f}B "
                     f"(period ending {fact.get('period_end')})")
-        elif "label" in fact:
+        elif "observation_date" in fact:
             text = f"{fact['label']} was {v} on {fact['observation_date']}"
         else:
             continue

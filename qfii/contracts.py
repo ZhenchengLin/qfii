@@ -176,3 +176,12 @@ class PortfolioSnapshot(BaseModel):
     limits: dict[str, float]
     costs_bps: dict[str, float]
     tax: dict[str, float]
+
+
+def ballot_reply_schema() -> dict[str, Any]:
+    """JSON schema for what a member's LLM returns: a Ballot without `member`
+    (the code signs ballots, so a member cannot vote as someone else)."""
+    schema = Ballot.model_json_schema()
+    schema["properties"].pop("member", None)
+    schema["required"] = [r for r in schema.get("required", []) if r != "member"]
+    return schema

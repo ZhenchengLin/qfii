@@ -12,12 +12,14 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from .scheduler import SchedulerSettings
+
 TIERS = ("mid", "strong", "strongest")
 COMMITTEE = ("aggressive", "conservative", "neutral")
 AGENTS = ("research", "assessment", "risk", *COMMITTEE)
 CONSENSUS_RULES = ("unanimous", "majority")
 EXECUTION_MODES = ("paper",)  # live trading is out of scope for v0.1
-PROVIDERS = ("fake", "openai_compat")
+PROVIDERS = ("fake", "ollama", "openai_compat")
 DATA_SOURCES = ("synthetic", "csv")
 
 
@@ -33,6 +35,11 @@ class ModelSpec:
     api_key_env: str = ""
     usd_per_m_input: float = 0.0
     usd_per_m_output: float = 0.0
+    num_ctx: int = 16384
+    think: bool = False
+    temperature: float = 0.0
+    merge_system_prompt: bool = False
+    timeout_s: float = 600.0
 
 
 @dataclass(frozen=True)
@@ -72,6 +79,7 @@ class Portfolio:
 
 @dataclass(frozen=True)
 class Config:
+    scheduler: SchedulerSettings
     db_path: Path
     models: dict[str, ModelSpec]
     agents: dict[str, AgentSpec]
@@ -170,10 +178,19 @@ def _build(raw: dict[str, Any]) -> Config:
             raise ConfigError(f"models.{tier}.model is required")
         if spec["provider"] == "openai_compat" and not spec["base_url"]:
             raise ConfigError(f"models.{tier}.base_url is required for openai_compat")
+        where = f"models.{tier}"
+        for flag in ("think", "merge_system_prompt"):
+            if not isinstance(spec[flag], bool):
+                raise ConfigError(f"{where}.{flag} must be true or false")
         models[tier] = ModelSpec(
             spec["provider"], spec["model"], spec["base_url"], spec["api_key_env"],
-            float(_number(spec, "usd_per_m_input", f"models.{tier}", lo=0)),
-            float(_number(spec, "usd_per_m_output", f"models.{tier}", lo=0)),
+            float(_number(spec, "usd_per_m_input", where, lo=0)),
+            float(_number(spec, "usd_per_m_output", where, lo=0)),
+            int(_number(spec, "num_ctx", where, lo=512, hi=1_048_576, integer=True)),
+            spec["think"],
+            float(_number(spec, "temperature", where, lo=0, hi=2)),
+            spec["merge_system_prompt"],
+            float(_number(spec, "timeout_s", where, lo=1)),
         )
 
     agents = {}
@@ -206,7 +223,17 @@ def _build(raw: dict[str, Any]) -> Config:
     if mode not in EXECUTION_MODES:
         raise ConfigError(f"execution.mode must be one of {EXECUTION_MODES}, got {mode!r}")
 
+    rt = raw["runtime"]
+    if not isinstance(rt["exclusive_models"], bool):
+        raise ConfigError("runtime.exclusive_models must be true or false")
     return Config(
+        scheduler=SchedulerSettings(
+            exclusive=rt["exclusive_models"],
+            max_concurrent=int(_number(rt, "max_concurrent_calls", "runtime", lo=1, hi=64,
+                                       integer=True)),
+            settle_s=float(_number(rt, "settle_ms", "runtime", lo=0, hi=10_000)) / 1000,
+            max_batch=int(_number(rt, "max_batch", "runtime", lo=1, integer=True)),
+        ),
         db_path=Path(raw["paths"]["db"]),
         models=models,
         agents=agents,

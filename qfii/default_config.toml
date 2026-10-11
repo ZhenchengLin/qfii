@@ -4,11 +4,17 @@
 [paths]
 db = "data/qfii.db"
 
-# Model tiers. provider "fake" uses the scripted FakeLLM (no API keys).
-# provider "openai_compat" calls any OpenAI-compatible /chat/completions
-# endpoint (NVIDIA NIM / Brev, Ollama, vLLM, OpenAI): set base_url, and the
-# NAME of the environment variable holding the key in api_key_env.
+# Model tiers. provider:
+#   "fake"           scripted replies, no model needed (default; tests use it)
+#   "ollama"         local Ollama (base_url defaults to http://localhost:11434)
+#   "openai_compat"  any OpenAI-compatible endpoint (vLLM / NIM on Brev, OpenAI);
+#                    api_key_env is the NAME of the env var holding the key.
+# num_ctx: context window to request; a prompt that fills it is refused rather
+#   than silently truncated. think: let reasoning models think first (the
+#   thinking is kept out of the parsed answer). merge_system_prompt: put the
+#   system prompt in the user turn (recommended for DeepSeek-R1 distills).
 # usd_per_m_input / usd_per_m_output: price per million tokens, for budgets.
+# See configs/local-ollama.toml for the team's Qwen3.5 / DeepSeek-R1 setup.
 [models.mid]
 provider = "fake"
 model = "fake-mid"
@@ -16,6 +22,11 @@ base_url = ""
 api_key_env = ""
 usd_per_m_input = 0.0
 usd_per_m_output = 0.0
+num_ctx = 16384
+think = false
+temperature = 0.0
+merge_system_prompt = false
+timeout_s = 600.0
 
 [models.strong]
 provider = "fake"
@@ -24,6 +35,11 @@ base_url = ""
 api_key_env = ""
 usd_per_m_input = 0.0
 usd_per_m_output = 0.0
+num_ctx = 16384
+think = false
+temperature = 0.0
+merge_system_prompt = false
+timeout_s = 600.0
 
 [models.strongest]
 provider = "fake"
@@ -32,6 +48,11 @@ base_url = ""
 api_key_env = ""
 usd_per_m_input = 0.0
 usd_per_m_output = 0.0
+num_ctx = 16384
+think = false
+temperature = 0.0
+merge_system_prompt = false
+timeout_s = 600.0
 
 # One LLM per team. daily_budget_usd caps spend per agent per day.
 [agents.research]
@@ -61,6 +82,16 @@ daily_budget_usd = 5.0
 [agents.neutral]
 tier = "strongest"
 daily_budget_usd = 8.0
+
+# How LLM calls share the machine. exclusive = only one model loaded at a time:
+# the resident model finishes all its queued calls (waiting settle_ms for
+# stragglers) before it is unloaded and the next model loads. max_batch caps how
+# many calls one model serves while others wait. max_concurrent: parallel calls.
+[runtime]
+exclusive_models = true
+max_concurrent_calls = 1
+settle_ms = 150
+max_batch = 64
 
 [universe]
 symbols = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "JPM", "XOM", "JNJ", "PG"]

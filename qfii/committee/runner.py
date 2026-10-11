@@ -30,9 +30,13 @@ class PlaceholderTeams:
 
 
 def placeholder_reports(packet: EvidencePacket) -> tuple[dict[str, Any], dict[str, Any]]:
-    facts = [o.text for o in packet.observations]
+    by_id = {e.id: e for e in packet.evidence}
+    facts = [{"text": o.text, "specialty": o.specialty,
+              "evidence": [{"id": i, **{k: v for k, v in by_id[i].payload.items() if k != "bars"}}
+                           for i in o.evidence_ids]}
+             for o in packet.observations]
     proposal = {"status": "placeholder: Assessment agent not built",
-                "symbol": packet.symbol, "evidence": facts, "gaps": packet.gaps}
+                "symbol": packet.symbol, "observations": facts, "gaps": packet.gaps}
     risk = {"status": "placeholder: Risk & Validation agent not built",
             "quality_flags": packet.quality_flags}
     return proposal, risk

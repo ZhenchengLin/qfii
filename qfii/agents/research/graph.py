@@ -23,9 +23,11 @@ from pydantic import ValidationError
 from ...contracts import EvidenceItem, EvidencePacket, ResearchNotes, ResearchRequest
 from ...llm import LLM, LLMError, failed_call, parse_json_object
 from ...tools.client import ToolBox
+from ...tools.indicators import LABELS
 
 MAX_ATTEMPTS = 2
 SYSTEM_PROMPT = resources.files("qfii.agents.research").joinpath("prompt.md").read_text()
+NOTES_SCHEMA = ResearchNotes.model_json_schema()
 
 
 class ResearchState(TypedDict, total=False):
@@ -70,8 +72,9 @@ def build_research_graph(tools: ToolBox, llm: LLM):
             ev = EvidenceItem.make(symbol=symbol, kind=kind, source=source, as_of=as_of,
                                    retrieved_at=retrieved, payload=payload, params=params)
             evidence.append(ev)
+            label = LABELS.get(name) or extra.pop("label", None) or name.replace("_", " ")
             facts.append({"evidence_id": ev.id, "specialty": specialty, "name": name,
-                          "value": value, **extra})
+                          "label": label, "value": value, **extra})
 
         # technical: price, indicators, benchmark
         if hist["n"]:
@@ -138,7 +141,8 @@ def build_research_graph(tools: ToolBox, llm: LLM):
         attempts = state["attempts"] + 1
         calls = list(state["llm_calls"])
         try:
-            result = await llm.complete(SYSTEM_PROMPT, json.dumps(user, indent=1))
+            result = await llm.complete(SYSTEM_PROMPT, json.dumps(user, separators=(",", ":")),
+                                        NOTES_SCHEMA)
         except LLMError as exc:
             calls.append(failed_call(llm, str(exc)))
             return {"attempts": attempts, "llm_calls": calls, "notes": None,
