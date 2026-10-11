@@ -18,6 +18,7 @@ TIERS = ("mid", "strong", "strongest")
 COMMITTEE = ("aggressive", "conservative", "neutral")
 AGENTS = ("research", "assessment", "risk", *COMMITTEE)
 CONSENSUS_RULES = ("unanimous", "majority")
+INFO_REQUEST_RULES = ("any", "majority", "unanimous")
 EXECUTION_MODES = ("paper",)  # live trading is out of scope for v0.1
 PROVIDERS = ("fake", "ollama", "openai_compat")
 DATA_SOURCES = ("synthetic", "csv")
@@ -64,6 +65,7 @@ class Committee:
     max_rounds: int
     invest_rule: str
     procedural_rule: str
+    info_request_rule: str
     size_tolerance_pct: float
     max_send_backs: int
     memory_items: int
@@ -156,7 +158,10 @@ def _committee(raw: dict[str, Any]) -> Committee:
     for key in ("invest_rule", "procedural_rule"):
         if raw[key] not in CONSENSUS_RULES:
             raise ConfigError(f"committee.{key} must be one of {CONSENSUS_RULES}")
+    if raw["info_request_rule"] not in INFO_REQUEST_RULES:
+        raise ConfigError(f"committee.info_request_rule must be one of {INFO_REQUEST_RULES}")
     return Committee(
+        info_request_rule=raw["info_request_rule"],
         max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=10, integer=True)),
         invest_rule=raw["invest_rule"],
         procedural_rule=raw["procedural_rule"],

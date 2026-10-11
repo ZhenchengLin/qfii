@@ -15,7 +15,8 @@ replace also need agreement on the size (all within size_tolerance_pct; the
 median is used) and, for replace, on which position to sell. Backing the same
 amendment (propose + support) also needs `invest_rule` votes; its terms are
 fixed, so that is agreement on the size and terms. Procedural actions
-(request_info, send_back) need `procedural_rule` votes. Anything else: no
+send_back needs `procedural_rule` votes; request_info needs `info_request_rule`
+("any": one member's question is answered). Anything else: no
 decision this round.
 """
 
@@ -109,12 +110,21 @@ def tally(ballots: list[Ballot], rules: Committee,
             f"{aid} by {'/'.join(b.member for b in g)}" for aid, g in sorted(backers.items())))
 
     proc_need = votes_needed(rules.procedural_rule, len(ballots))
-    for action in PROCEDURAL_ACTIONS:
-        group = by_action.get(action, [])
-        if len(group) >= proc_need:
-            return RoundOutcome(action, votes, teams=_teams(group),
-                                requests=[f"[{b.member}] {b.request}" for b in group],
-                                detail=f"{len(group)} of {len(ballots)} {action}")
+    backs = by_action.get("send_back", [])
+    if len(backs) >= proc_need:
+        return RoundOutcome("send_back", votes, teams=_teams(backs),
+                            requests=[f"[{b.member}] {b.request}" for b in backs],
+                            detail=f"{len(backs)} of {len(ballots)} send_back")
+
+    # Questions to a team: with info_request_rule "any", one member's question is
+    # answered and the report goes to everyone.
+    asks = by_action.get("request_info", [])
+    info_need = 1 if rules.info_request_rule == "any" else \
+        votes_needed(rules.info_request_rule, len(ballots))
+    if asks and len(asks) >= info_need:
+        return RoundOutcome("request_info", votes, teams=_teams(asks),
+                            requests=[f"[{b.member}] {b.request}" for b in asks],
+                            detail=f"{len(asks)} of {len(ballots)} asked for information")
 
     return RoundOutcome("continue", votes, detail="; ".join(blocked) or "no action reached "
                         f"its threshold (trade needs {trade_need}, procedural needs {proc_need})")

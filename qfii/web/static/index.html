@@ -88,6 +88,7 @@ details summary { cursor: pointer; font-weight: 600; }
   background: var(--soft); font-size: 13px; }
 .amend p { margin: 4px 0 0; } .amend .cond { color: var(--muted); }
 .trace { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.report .asked { margin: 2px 0; color: var(--info); font-size: 13px; }
 .trace summary { cursor: pointer; } .trace ul { margin: 4px 0 0; }
 .waiting { color: var(--muted); font-size: 14px; margin-top: 10px; }
 .waiting::after { content: "…"; animation: pulse 1.2s infinite; }
@@ -281,7 +282,11 @@ function renderProposal(p, version) {
 function renderReport(rep) {
   const r = rep.report || {};
   const div = el("div", "report");
-  div.append(el("b", null, rep.team === "risk" ? "Risk & Validation report" : "Assessment answers"));
+  div.append(el("b", null, rep.team === "risk" ? "Risk & Validation report" : "Assessment report"));
+  for (const q of rep.requests || []) {
+    const m = q.match(/^\[(\w+)\]\s*(.*)$/s);
+    div.append(el("p", "asked", m ? `${m[1][0].toUpperCase() + m[1].slice(1)} asked: ${m[2]}` : q));
+  }
   if (r.error || r.note) { div.append(el("p", null, r.error || r.note)); return div; }
   const ul = el("ul");
   for (const a of r.answers || []) ul.append(el("li", null, a.claim));

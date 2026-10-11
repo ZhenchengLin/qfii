@@ -80,12 +80,13 @@ async def test_no_consensus_after_three_rounds_shelves():
     assert result.final is None
 
 
-async def test_info_request_on_final_round_is_not_fetched():
+async def test_question_in_the_last_round_is_still_answered():
     teams = Teams()
     members = [Scripted(m, PASS, INV, ASK) for m in ("aggressive", "conservative")]
     members.append(Scripted("neutral", INV, PASS, ASK))
     result = await run_debate(dossier(), members, teams, RULES)
-    assert result.outcome == "no_consensus" and teams.asked == []
+    assert result.outcome == "no_consensus"
+    assert teams.asked and result.rounds[-1].reports[0]["team"] == "risk"
 
 
 async def test_send_back_ends_debate():

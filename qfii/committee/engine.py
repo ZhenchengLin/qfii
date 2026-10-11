@@ -193,7 +193,8 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
         rec = RoundRecord(r, ballots, outcome)
         rounds.append(rec)
 
-        if outcome.kind == "request_info" and r < rules.max_rounds:
+        if outcome.kind == "request_info":   # answered even in the last round: the
+                                             # report is printed for the viewers
             for team in outcome.teams:
                 report = await teams.report(team, outcome.requests, dossier)
                 entry = {"round": r, "team": team, "requests": outcome.requests,

@@ -77,9 +77,23 @@ def test_send_back_by_majority():
     assert out.kind == "send_back" and out.teams == ["assessment"]
 
 
-def test_single_procedural_vote_does_nothing():
+def test_one_members_question_is_answered_by_default():
     out = tally(three(("invest", 9000), ("request_info", None, None, "risk", "q"), ("pass",)),
                 RULES)
+    assert out.kind == "request_info" and out.teams == ["risk"]
+    assert out.requests == ["[conservative] q"]
+
+
+def test_majority_info_rule_ignores_a_lone_question():
+    ben = replace(RULES, info_request_rule="majority")
+    out = tally(three(("invest", 9000), ("request_info", None, None, "risk", "q"), ("pass",)),
+                ben)
+    assert out.kind == "continue"
+
+
+def test_a_lone_send_back_does_nothing():
+    out = tally(three(("invest", 9000), ("send_back", None, None, "assessment", "redo"),
+                      ("pass",)), RULES)
     assert out.kind == "continue"
 
 

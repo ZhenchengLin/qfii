@@ -108,6 +108,8 @@ def _print_round(symbol: str, rec) -> None:
     for rep in rec.reports:
         r = rep["report"]
         print(f"  report from {rep['team']}:")
+        for q in rep["requests"]:
+            print(f"    asked: {q}")
         for a in r.get("answers", []):
             print(f"    answer: {a['claim']}")
         for f in r.get("findings", []):
