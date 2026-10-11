@@ -9,3 +9,13 @@ csv_dir = "data/week/prices"
 intraday_dir = "data/week/intraday"
 macro_dir = "data/week/macro"
 sec_cache_dir = "data/week/sec"
+
+# A separate database, so the week replay starts clean (the website shows it
+# when started with this config).
+[paths]
+db = "data/week-run.db"
+
+# Ben's structure: Assessment screens all reports, writes the proposal, and sits
+# on the committee as the neutral member.
+[committee]
+neutral_is_assessment = true

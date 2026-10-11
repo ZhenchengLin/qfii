@@ -39,6 +39,7 @@ class ResearchRequest(BaseModel):
 
     symbol: str
     as_of: date | None = None
+    cutoff: str | None = None     # minute cutoff, e.g. "2026-10-07T11:20" (overrides as_of)
     question: str | None = None
     requested_by: Literal["discovery", "assessment", "risk", "aggressive", "conservative",
                           "neutral", "user"] = "user"
@@ -116,7 +117,7 @@ Member = Literal["aggressive", "conservative", "neutral"]
 # produces no valid ballot, and it counts toward nothing.
 BallotAction = Literal["invest", "replace", "pass", "request_info", "send_back", "propose",
                        "support", "abstain"]
-Team = Literal["assessment", "risk", "both"]
+Team = Literal["assessment", "research", "risk", "both"]
 
 
 class Amendment(BaseModel):
@@ -294,6 +295,37 @@ class Proposal(BaseModel):
     suggested_position_pct: float = Field(ge=0, le=100)
     verdict: Literal["submit", "reject", "defer", "needs_evidence"]
     research_questions: list[str] = Field(default_factory=list, max_length=5)
+
+
+class ScreenItem(BaseModel):
+    """Assessment's call on one research report in the week replay."""
+
+    symbol: str
+    decision: Literal["advance", "hold", "dig", "reject"]
+    reason: str = Field(min_length=1, max_length=800)
+    questions: list[str] = Field(default_factory=list, max_length=4)   # for "dig"
+    evidence_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("symbol")
+    @classmethod
+    def _upper(cls, v: str) -> str:
+        return v.strip().upper()
+
+    @model_validator(mode="after")
+    def _dig_needs_questions(self) -> ScreenItem:
+        if self.decision == "dig" and not self.questions:
+            raise ValueError(f"{self.symbol}: dig needs questions for Research")
+        if self.decision != "dig":
+            self.questions = []
+        return self
+
+
+class Screen(BaseModel):
+    """Assessment reads every report at once: advance to the committee, hold,
+    send Research to dig deeper, or reject."""
+
+    items: list[ScreenItem] = Field(min_length=1)
+    notes: str = Field(default="", max_length=1500)
 
 
 class RiskFinding(BaseModel):

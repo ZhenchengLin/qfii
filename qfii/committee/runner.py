@@ -16,7 +16,7 @@ from datetime import date
 from typing import Any
 
 from ..agents.research.agent import ResearchAgent
-from ..agents.structured import AgentFailed
+from ..agents.structured import AgentFailed, fact_rows
 from ..agents.teams.agents import AssessmentAgent, RiskAgent
 from ..config import Config
 from ..contracts import EvidencePacket, Proposal, ResearchRequest
@@ -56,8 +56,12 @@ class Teams:
         self.packet, self.portfolio, self.proposal = packet, portfolio, proposal
         self.assessment = assessment
         self.risk = RiskAgent(cfg)
+        self.cfg = cfg
+        self.research_calls: list[dict[str, Any]] = []
 
     async def report(self, team: str, requests: list[str], dossier: Dossier) -> dict[str, Any]:
+        if team == "research":
+            return await self._research(requests)
         try:
             if team == "risk":
                 rep = await self.risk.review(self.packet, self.portfolio, self.proposal,
@@ -76,6 +80,31 @@ class Teams:
         return {"team": team, **rep.model_dump(exclude_none=True),
                 "tool_trace": [{**t, "label": looked_up[t["evidence_id"]].payload.get("label")}
                                if t.get("evidence_id") in looked_up else t for t in trace]}
+
+
+    async def _research(self, requests: list[str]) -> dict[str, Any]:
+        """Research digs deeper: re-run on this stock at the same cutoff, with the
+        committee's questions searched in the filings."""
+        from ..agents.research.agent import ResearchFailed
+
+        questions = [r.split("] ", 1)[-1] for r in requests]
+        as_of = self.packet.as_of
+        req = ResearchRequest(symbol=self.packet.symbol, question=" | ".join(questions),
+                              requested_by="neutral",
+                              **({"cutoff": as_of} if "T" in as_of
+                                 else {"as_of": date.fromisoformat(as_of)}))
+        try:
+            packet, calls = await ResearchAgent(self.cfg).run(req)
+        except ResearchFailed as exc:
+            return {"team": "research", "error": str(exc)}
+        self.research_calls.extend(calls)
+        by_id = {e.id: e for e in packet.evidence}
+        cited = {i for o in packet.observations for i in o.evidence_ids}
+        return {"team": "research", "answering": questions,
+                "observations": [{"text": o.text, "evidence_ids": o.evidence_ids}
+                                 for o in packet.observations],
+                "facts": [row for row in fact_rows([by_id[i] for i in cited if i in by_id])],
+                "gaps": packet.gaps}
 
 
 @dataclass
@@ -135,6 +164,23 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
         return PaperRun(packet, proposal, paper_id=paper_id,
                         outcome=f"assessment_{proposal.verdict}")
 
+    return await debate_paper(cfg, conn, packet, portfolio, assessment, proposal, paper_id,
+                              proposal_id, save, on_round, on_ballot, on_proposal)
+
+
+async def debate_paper(cfg: Config, conn: sqlite3.Connection, packet: EvidencePacket,
+                       portfolio: dict[str, Any], assessment: AssessmentAgent,
+                       proposal: Proposal, paper_id: int | None, proposal_id: int | None,
+                       save: bool = False, on_round=None, on_ballot=None,
+                       on_proposal=None) -> PaperRun:
+    """The committee half of a paper: debate the submitted proposal, with team
+    reports on request and revisions after a send-back."""
+    def persist_calls(agent: str, calls: list[dict[str, Any]]) -> None:
+        if save and calls:
+            with conn:
+                record_llm_calls(conn, agent, cfg.agents[agent].tier, calls, paper_id)
+            calls.clear()
+
     run = PaperRun(packet, proposal, paper_id=paper_id)
     risk_report = None
     for attempt in range(cfg.committee.max_send_backs + 1):
@@ -147,6 +193,7 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
         run.debates.append(result)
         persist_calls("assessment", assessment.calls)
         persist_calls("risk", teams.risk.calls)
+        persist_calls("research", teams.research_calls)
         if save:
             run.debate_id = save_debate(
                 conn, paper_id, packet.symbol, result,

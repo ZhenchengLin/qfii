@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # Upgrades for databases created by an older version:
 #   {target version: (table the step rewrites, or None; SQL)} or a list of such steps.
@@ -109,6 +109,77 @@ DROP TABLE ballots_v5;
 """),
     # each round's counted result as the engine saw it (rules can change later)
     7: ("debates", "ALTER TABLE debates ADD COLUMN round_results_json TEXT;"),
+    # Research can be asked during a debate (Assessment may sit at the table as
+    # the neutral member), and the week replay records its runs and events.
+    8: [("ballots", """
+ALTER TABLE ballots RENAME TO ballots_v7;
+CREATE TABLE ballots (
+    id              INTEGER PRIMARY KEY,
+    debate_id       INTEGER NOT NULL REFERENCES debates(id),
+    round           INTEGER NOT NULL CHECK (round BETWEEN 1 AND 50),
+    member          TEXT NOT NULL CHECK (member IN ('aggressive', 'conservative', 'neutral')),
+    action          TEXT NOT NULL CHECK (action IN ('invest', 'replace', 'pass', 'request_info',
+                                                    'send_back', 'propose', 'support',
+                                                    'abstain')),
+    size_usd        REAL CHECK (size_usd IS NULL OR size_usd > 0),
+    replace_symbol  TEXT,
+    target          TEXT CHECK (target IN ('assessment', 'research', 'risk', 'both')),
+    request         TEXT,
+    argument        TEXT NOT NULL,
+    llm_call_id     INTEGER REFERENCES llm_calls(id),
+    created_at      TEXT NOT NULL,
+    amendment_id    TEXT,            -- propose: the id it received; support: the id backed
+    amendment_json  TEXT,            -- propose: the proposed terms
+    changed_because TEXT,            -- why the member changed position (anti-herding audit)
+    UNIQUE (debate_id, round, member),
+    CHECK (action NOT IN ('invest', 'replace') OR size_usd IS NOT NULL),
+    CHECK (action <> 'replace' OR replace_symbol IS NOT NULL),
+    CHECK (action NOT IN ('request_info', 'send_back') OR (target IS NOT NULL AND request IS NOT NULL))
+);
+INSERT INTO ballots (id, debate_id, round, member, action, size_usd, replace_symbol, target, request, argument, llm_call_id, created_at, amendment_id, amendment_json, changed_because) SELECT id, debate_id, round, member, action, size_usd, replace_symbol, target, request, argument, llm_call_id, created_at, amendment_id, amendment_json, changed_because FROM ballots_v7;
+DROP TABLE ballots_v7;
+"""), ("info_requests", """
+ALTER TABLE info_requests RENAME TO info_requests_v7;
+CREATE TABLE info_requests (
+    id            INTEGER PRIMARY KEY,
+    debate_id     INTEGER NOT NULL REFERENCES debates(id),
+    round         INTEGER NOT NULL,
+    team          TEXT NOT NULL CHECK (team IN ('assessment', 'research', 'risk')),
+    questions     TEXT NOT NULL,
+    report_json   TEXT,
+    llm_call_id   INTEGER REFERENCES llm_calls(id),
+    created_at    TEXT NOT NULL,
+    answered_at   TEXT
+);
+INSERT INTO info_requests SELECT * FROM info_requests_v7;
+DROP TABLE info_requests_v7;
+"""), (None, """
+-- Bottom-up week replay: one row per run, its progress, and what happened at
+-- each 10-minute slot (research written or skipped, Assessment's screen, debates).
+CREATE TABLE IF NOT EXISTS week_runs (
+    id            INTEGER PRIMARY KEY,
+    started_at    TEXT NOT NULL,
+    status        TEXT NOT NULL CHECK (status IN ('running', 'done', 'stopped', 'failed')),
+    symbols_json  TEXT NOT NULL,
+    window_json   TEXT NOT NULL,
+    last_slot     TEXT,
+    state_json    TEXT,
+    note          TEXT,
+    updated_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS week_events (
+    id            INTEGER PRIMARY KEY,
+    run_id        INTEGER NOT NULL REFERENCES week_runs(id),
+    slot          TEXT NOT NULL,
+    symbol        TEXT,
+    kind          TEXT NOT NULL,
+    detail_json   TEXT NOT NULL DEFAULT '{}',
+    paper_id      INTEGER REFERENCES papers(id),
+    debate_id     INTEGER REFERENCES debates(id),
+    created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS week_events_run ON week_events(run_id, id);
+""")],
 }
 
 

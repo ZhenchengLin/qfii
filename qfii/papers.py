@@ -20,7 +20,7 @@ from .db import utcnow
 
 TRANSITIONS: dict[str, set[str]] = {
     "candidate": {"packet_ready", "dropped"},
-    "packet_ready": {"proposal", "rejected", "deferred", "needs_evidence"},
+    "packet_ready": {"proposal", "rejected", "deferred", "needs_evidence", "dropped"},
     "needs_evidence": {"packet_ready", "dropped"},
     "deferred": {"packet_ready", "dropped"},
     "proposal": {"decided", "passed", "sent_back", "shelved"},

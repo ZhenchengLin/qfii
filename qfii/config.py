@@ -70,6 +70,7 @@ class Committee:
     info_request_rule: str
     stop_after_unchanged_rounds: int
     majority_pass_after_unchanged_rounds: int
+    neutral_is_assessment: bool
     size_tolerance_pct: float
     max_send_backs: int
     memory_items: int
@@ -175,6 +176,12 @@ def _number(raw: dict[str, Any], key: str, where: str, *, lo: float, hi: float |
     return value
 
 
+def _bool(raw: dict[str, Any], key: str, where: str) -> bool:
+    if not isinstance(raw[key], bool):
+        raise ConfigError(f"{where}.{key} must be true or false")
+    return raw[key]
+
+
 def _committee(raw: dict[str, Any]) -> Committee:
     for key in ("invest_rule", "pass_rule", "procedural_rule"):
         if raw[key] not in CONSENSUS_RULES:
@@ -187,6 +194,7 @@ def _committee(raw: dict[str, Any]) -> Committee:
                                                 lo=0, hi=50, integer=True)),
         majority_pass_after_unchanged_rounds=int(_number(
             raw, "majority_pass_after_unchanged_rounds", "committee", lo=0, hi=50, integer=True)),
+        neutral_is_assessment=_bool(raw, "neutral_is_assessment", "committee"),
         max_rounds=int(_number(raw, "max_rounds", "committee", lo=1, hi=50, integer=True)),
         invest_rule=raw["invest_rule"],
         pass_rule=raw["pass_rule"],

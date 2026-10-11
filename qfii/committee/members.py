@@ -116,6 +116,11 @@ class LLMMember:
                     raise ValueError(f"amendment {ballot.amendment_id} is not on the table "
                                      f"(on the table: {on_table}); support an existing id or "
                                      f"propose your own")
+                if view.rules.get("neutral_is_assessment") and ballot.action == \
+                        "request_info" and ballot.target == "assessment":
+                    raise ValueError("Assessment sits at this table as the neutral member: "
+                                     "ask it in your argument, or send request_info to "
+                                     "\"research\" (dig deeper into the data) or \"risk\"")
                 cap = view.rules.get("largest_allowed_order_usd")
                 size = ballot.amendment.size_usd if ballot.amendment else ballot.size_usd
                 if cap is not None and size and size > cap:
@@ -131,5 +136,10 @@ class LLMMember:
 
 
 def build_members(cfg: Config) -> list[LLMMember]:
-    return [LLMMember(name, make_llm(cfg, name, fake_member_responder(name)))
-            for name in COMMITTEE]
+    members = [LLMMember(name, make_llm(cfg, name, fake_member_responder(name)))
+               for name in COMMITTEE]
+    if cfg.committee.neutral_is_assessment:
+        for m in members:
+            if m.name == "neutral":
+                m.persona += "\n" + _PROMPTS.joinpath("neutral_assessment.md").read_text()
+    return members

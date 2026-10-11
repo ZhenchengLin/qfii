@@ -6,7 +6,14 @@ from importlib import resources
 from typing import Any
 
 from ...config import Config
-from ...contracts import AssessmentAnswer, EvidenceItem, EvidencePacket, Proposal, RiskReport
+from ...contracts import (
+    AssessmentAnswer,
+    EvidenceItem,
+    EvidencePacket,
+    Proposal,
+    RiskReport,
+    Screen,
+)
 from ...llm import make_llm
 from ...portfolio import max_new_order_usd
 from ...tools.client import ToolBox
@@ -42,6 +49,20 @@ def fetchable_sources(cfg: Config, symbol: str) -> dict[str, bool]:
             "filing_text_search": sec, "market_news_headlines": False}
 
 
+def screen_facts(packet: EvidencePacket) -> list[dict[str, Any]]:
+    """The citable facts of one report, compact enough to read ten at once:
+    no filing passages or press-release excerpts (their headlines stay), and
+    macro facts are shown once for all stocks."""
+    keep = []
+    by_id = {e.id: e for e in packet.evidence}
+    for row in fact_rows(packet.evidence):
+        ev = by_id[row["id"]]
+        if ev.kind == "macro" or ev.payload.get("name") == "filing_passage":
+            continue
+        keep.append({k: v for k, v in row.items() if k != "excerpt"})
+    return keep
+
+
 class AssessmentAgent:
     name = "assessment"
 
@@ -49,7 +70,52 @@ class AssessmentAgent:
         self.cfg = cfg
         self.llm = make_llm(cfg, self.name, fake_assessment_responder)
         self.system = _PROMPTS.joinpath("assessment.md").read_text()
+        self.screen_system = _PROMPTS.joinpath("screen.md").read_text()
         self.calls: list[dict[str, Any]] = []
+
+    async def screen(self, reports: list[dict[str, Any]], portfolio: dict[str, Any],
+                     cutoff: str, debated_today: list[str]
+                     ) -> tuple[Screen, list[EvidenceItem], list[dict[str, Any]]]:
+        """Read every report at once and decide per stock: advance / hold / dig /
+        reject. reports: {"packet": EvidencePacket, "price_now", "change_since_report_pct",
+        "new_filings_since_report", "answering"} per stock. May use the tools."""
+        packets = [r["packet"] for r in reports]
+        symbols = [p.symbol for p in packets]
+        macro = next(([row for row in fact_rows(p.evidence)
+                       if next(e for e in p.evidence if e.id == row["id"]).kind == "macro"]
+                      for p in packets), [])
+        payload = {
+            "cutoff": cutoff,
+            "reports": [{"symbol": r["packet"].symbol,
+                         "report_written_at": r["packet"].as_of,
+                         "price_now": r.get("price_now"),
+                         "change_since_report_pct": r.get("change_since_report_pct"),
+                         "new_filings_since_report": r.get("new_filings_since_report", []),
+                         "answering": r.get("answering"),
+                         "observations": _observations(r["packet"]),
+                         "facts": screen_facts(r["packet"]),
+                         "quality_flags": r["packet"].quality_flags,
+                         "gaps": r["packet"].gaps} for r in reports],
+            "macro": macro,
+            "already_debated_today": debated_today,
+            "research_can_fetch": fetchable_sources(self.cfg, symbols[0]),
+            "portfolio": _portfolio_view(portfolio),
+        }
+        known = {e.id for p in packets for e in p.evidence}
+
+        def fix(data: dict[str, Any]) -> dict[str, Any]:
+            items = data.get("items") or []
+            got = [str(i.get("symbol", "")).strip().upper() for i in items if isinstance(i, dict)]
+            missing = sorted(set(symbols) - set(got))
+            extra = sorted(set(got) - set(symbols))
+            if missing or extra or len(got) != len(set(got)):
+                raise ValueError(f"give exactly one item per stock; missing {missing}, "
+                                 f"unknown {extra}")
+            return data
+
+        return await with_tools(self.cfg, lambda tools: research_then_answer(
+            self.llm, self.screen_system, payload, Screen, tools, cutoff, known, self.calls,
+            self.cfg.max_tool_turns, fix))
 
     def _base(self, packet: EvidencePacket, portfolio: dict[str, Any]) -> dict[str, Any]:
         return {"symbol": packet.symbol, "as_of": packet.as_of,

@@ -257,6 +257,35 @@ def _cmd_week(cfg: Config, args: argparse.Namespace) -> int:
         problems = dataset.check(cfg, slots[::13])
         print("\n".join(problems) or f"dataset OK: {cfg.week.dataset_dir}")
         return 1 if problems else 0
+    if args.action == "run":
+        from .week.runner import Week
+
+        conn = connect(cfg.db_path)
+        init_db(conn, cfg.limits.starting_cash_usd)
+
+        def show(e: dict) -> None:
+            kind, sym = e["kind"], e.get("symbol") or ""
+            if kind == "slot":
+                if e["rewritten"]:
+                    print(f"{e['slot']}  research rewrote: {', '.join(e['rewritten'])}",
+                          flush=True)
+            elif kind == "research":
+                print(f"{e['slot']}  {sym:5} report ({e['reason']}) @ {e['price']}", flush=True)
+            elif kind == "screen":
+                calls = {i["symbol"]: i["decision"] for i in e["items"]}
+                print(f"{e['slot']}  assessment: " + ", ".join(f"{s}={d}" for s, d in
+                                                               calls.items()), flush=True)
+            elif kind in ("debate", "debate_started", "debate_skipped", "proposal_withdrawn",
+                          "error", "storage"):
+                rest = {k: v for k, v in e.items() if k not in ("slot", "kind", "symbol")}
+                print(f"{e['slot']}  {kind.upper():18} {sym:5} {json.dumps(rest)[:220]}",
+                      flush=True)
+
+        week = Week(cfg, conn, show)
+        summary = asyncio.run(week.run(resume=args.resume, until=args.until,
+                                       max_slots=args.slots))
+        print(json.dumps(summary, indent=2))
+        return 0 if summary["status"] in ("done", "stopped") else 1
     if args.action == "pack":
         import tarfile
 
@@ -538,9 +567,12 @@ def main(argv: list[str] | None = None) -> int:
                         "database, with what-if rule variants")
 
     p = sub.add_parser("week", help="bottom-up week replay: build the dataset, then run it")
-    p.add_argument("action", choices=["build", "check", "pack"])
+    p.add_argument("action", choices=["build", "check", "pack", "run"])
     p.add_argument("--no-download", action="store_true",
                    help="build only from raw files already saved under week.raw_dir")
+    p.add_argument("--resume", action="store_true", help="run: continue the last run")
+    p.add_argument("--until", help="run: stop after this slot, e.g. 2026-10-05T12:00")
+    p.add_argument("--slots", type=int, help="run: at most this many slots")
 
     p = sub.add_parser("bench", help="benchmark the committee model on an identical debate")
     p.add_argument("symbol")

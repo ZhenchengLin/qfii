@@ -5,7 +5,7 @@ Three members, equal weight. Each round every member casts one ballot:
   invest        open a new position at size_usd
   replace       sell replace_symbol, buy the new stock at size_usd
   pass          do not invest
-  request_info  ask a team (assessment / risk / both) for a report everyone sees
+  request_info  ask a team (assessment / research / risk / both) for a report everyone sees
   send_back     return the paper to a team for full revision, with feedback
   propose       put an amended deal on the table (size + terms); counts as backing it
   support       back an amendment already on the table, by its id (A1, A2, ...)
@@ -59,10 +59,18 @@ def sizes_agree(sizes: list[float], tolerance_pct: float) -> bool:
     return (max(sizes) - min(sizes)) / mid * 100 <= tolerance_pct + 1e-9
 
 
-def _teams(ballots: list[Ballot]) -> list[str]:
+def _teams(ballots: list[Ballot], rules: Committee | None = None) -> list[str]:
+    """Teams a request or send-back goes to. "both" = Assessment and Risk, except a
+    question when Assessment sits at the table (neutral_is_assessment): then
+    Research and Risk."""
     teams: set[str] = set()
     for b in ballots:
-        teams |= {"assessment", "risk"} if b.target == "both" else {b.target}
+        if b.target == "both":
+            asks = b.action == "request_info" and rules is not None and \
+                rules.neutral_is_assessment
+            teams |= {"research", "risk"} if asks else {"assessment", "risk"}
+        else:
+            teams.add(b.target)
     return sorted(teams)
 
 
@@ -117,7 +125,7 @@ def tally(ballots: list[Ballot], rules: Committee,
     proc_need = votes_needed(rules.procedural_rule, len(ballots))
     backs = by_action.get("send_back", [])
     if len(backs) >= proc_need:
-        return RoundOutcome("send_back", votes, teams=_teams(backs),
+        return RoundOutcome("send_back", votes, teams=_teams(backs, rules),
                             requests=[f"[{b.member}] {b.request}" for b in backs],
                             detail=f"{len(backs)} of {len(ballots)} send_back")
 
@@ -127,7 +135,7 @@ def tally(ballots: list[Ballot], rules: Committee,
     info_need = 1 if rules.info_request_rule == "any" else \
         votes_needed(rules.info_request_rule, len(ballots))
     if asks and len(asks) >= info_need:
-        return RoundOutcome("request_info", votes, teams=_teams(asks),
+        return RoundOutcome("request_info", votes, teams=_teams(asks, rules),
                             requests=[f"[{b.member}] {b.request}" for b in asks],
                             detail=f"{len(asks)} of {len(ballots)} asked for information")
 

@@ -174,6 +174,10 @@ stop_after_unchanged_rounds = 0
 # pass, even under pass_rule = "unanimous". Before that the minority can still
 # negotiate (amendments). 0 = off. Checked before stop_after_unchanged_rounds.
 majority_pass_after_unchanged_rounds = 0
+# Ben's structure for the week replay: the Assessment agent (which screened the
+# reports and wrote the proposal) takes the neutral seat. Members then ask
+# "research" (dig deeper into the data) or "risk" for reports, not Assessment.
+neutral_is_assessment = false
 size_tolerance_pct = 10.0
 max_send_backs = 1
 memory_items = 20

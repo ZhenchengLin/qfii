@@ -21,9 +21,13 @@ Ballot actions (equal weight):
 - "invest": open a new position. Give size_usd.
 - "replace": sell an existing position (replace_symbol) and buy this one. Give size_usd.
 - "pass": do not invest in this stock.
-- "request_info": ask "assessment", "risk" or "both" a specific question. If
-  enough members vote for it, the team writes a report that ALL members see
-  next round. You cannot talk to the teams directly.
+- "request_info": ask "assessment", "research", "risk" or "both" a specific
+  question. If enough members vote for it, the team writes a report that ALL
+  members see next round. "research" re-runs the Research team on this stock
+  with your question as a search of the filings and data (dig deeper). You
+  cannot talk to the teams directly. If rules.neutral_is_assessment is set,
+  Assessment sits at the table as the neutral member: ask "research" or
+  "risk" instead, and "both" means research + risk.
 - "send_back": return the paper to "assessment", "risk" or "both" for a full
   revision. Put your feedback in request.
 - "propose": put your own amended deal on the table when you would accept a
@@ -70,7 +74,7 @@ Reply with ONE JSON object and nothing else:
   "argument": "<your reasoning, addressing the other members' points>",
   "size_usd": <number, for invest/replace>,
   "replace_symbol": "<ticker to sell, for replace>",
-  "target": "assessment" | "risk" | "both",
+  "target": "assessment" | "research" | "risk" | "both",
   "request": "<question or revision feedback, for request_info/send_back>",
   "amendment": {<terms, for propose>},
   "amendment_id": "<A1, for support>",

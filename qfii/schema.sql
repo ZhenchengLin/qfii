@@ -140,7 +140,7 @@ CREATE TABLE ballots (
                                                     'abstain')),
     size_usd        REAL CHECK (size_usd IS NULL OR size_usd > 0),
     replace_symbol  TEXT,
-    target          TEXT CHECK (target IN ('assessment', 'risk', 'both')),
+    target          TEXT CHECK (target IN ('assessment', 'research', 'risk', 'both')),
     request         TEXT,
     argument        TEXT NOT NULL,
     llm_call_id     INTEGER REFERENCES llm_calls(id),
@@ -160,7 +160,7 @@ CREATE TABLE info_requests (
     id            INTEGER PRIMARY KEY,
     debate_id     INTEGER NOT NULL REFERENCES debates(id),
     round         INTEGER NOT NULL,
-    team          TEXT NOT NULL CHECK (team IN ('assessment', 'risk')),
+    team          TEXT NOT NULL CHECK (team IN ('assessment', 'research', 'risk')),
     questions     TEXT NOT NULL,
     report_json   TEXT,
     llm_call_id   INTEGER REFERENCES llm_calls(id),
@@ -250,3 +250,29 @@ CREATE TABLE IF NOT EXISTS investor_profile (
     state_tax_pct  REAL NOT NULL DEFAULT 0 CHECK (state_tax_pct BETWEEN 0 AND 20),
     updated_at     TEXT NOT NULL
 );
+
+-- Bottom-up week replay: one row per run, its progress, and what happened at
+-- each 10-minute slot (research written or skipped, Assessment's screen, debates).
+CREATE TABLE IF NOT EXISTS week_runs (
+    id            INTEGER PRIMARY KEY,
+    started_at    TEXT NOT NULL,
+    status        TEXT NOT NULL CHECK (status IN ('running', 'done', 'stopped', 'failed')),
+    symbols_json  TEXT NOT NULL,
+    window_json   TEXT NOT NULL,
+    last_slot     TEXT,
+    state_json    TEXT,
+    note          TEXT,
+    updated_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS week_events (
+    id            INTEGER PRIMARY KEY,
+    run_id        INTEGER NOT NULL REFERENCES week_runs(id),
+    slot          TEXT NOT NULL,
+    symbol        TEXT,
+    kind          TEXT NOT NULL,
+    detail_json   TEXT NOT NULL DEFAULT '{}',
+    paper_id      INTEGER REFERENCES papers(id),
+    debate_id     INTEGER REFERENCES debates(id),
+    created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS week_events_run ON week_events(run_id, id);

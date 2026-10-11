@@ -112,6 +112,7 @@ def _rules(rules: Committee, portfolio: dict[str, Any] | None = None) -> dict[st
         "trade_rule": rules.invest_rule, "pass_rule": rules.pass_rule,
         "majority_pass_after_unchanged_rounds":
             rules.majority_pass_after_unchanged_rounds or None,
+        "neutral_is_assessment": rules.neutral_is_assessment or None,
         "procedural_rule": rules.procedural_rule,
         "size_tolerance_pct": rules.size_tolerance_pct,
     }

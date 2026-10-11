@@ -20,10 +20,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from ...clock import AsOf
 from ...contracts import EvidenceItem, EvidencePacket, ResearchNotes, ResearchRequest
 from ...llm import LLM, LLMError, failed_call, parse_json_object
 from ...tools.client import ToolBox
-from ..evidence import collect_evidence
+from ..evidence import DEFAULT_FILING_QUERIES, collect_evidence
 
 MAX_ATTEMPTS = 2
 SYSTEM_PROMPT = resources.files("qfii.agents.research").joinpath("prompt.md").read_text()
@@ -52,8 +53,14 @@ def _now() -> str:
 def build_research_graph(tools: ToolBox, llm: LLM):
     async def gather(state: ResearchState) -> dict:
         req = state["request"]
-        as_of = (req.as_of or date.today()).isoformat()
-        got = await collect_evidence(tools, req.symbol, as_of)
+        as_of = AsOf.parse(req.cutoff).iso() if req.cutoff else \
+            (req.as_of or date.today()).isoformat()
+        # a question (from Assessment or the committee) is also searched in the
+        # filings, so asking Research to dig deeper finds new passages
+        queries = list(DEFAULT_FILING_QUERIES)
+        if req.question:
+            queries = [q.strip()[:300] for q in req.question.split(" | ") if q.strip()] + queries
+        got = await collect_evidence(tools, req.symbol, as_of, queries)
         return {"as_of": as_of, "evidence": got.evidence, "facts": got.facts,
                 "flags": got.flags, "gaps": got.gaps, "attempts": 0, "llm_calls": [],
                 "feedback": None}

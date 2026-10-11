@@ -10,8 +10,35 @@ def _by_name(facts: list[dict], *labels: str) -> list[dict]:
     return hits or facts[:1]
 
 
+def fake_screen(data: dict) -> str:
+    """Advance the strongest 12-month return; on a first look, send Research to dig
+    on the weakest; hold the rest."""
+    def ret(r):
+        f = next((x for x in r["facts"] if "12-month price return" in (x.get("label") or "")),
+                 None)
+        return (f["value"] if f else 0.0), f
+    ranked = sorted(data["reports"], key=lambda r: ret(r)[0], reverse=True)
+    items = []
+    for i, r in enumerate(ranked):
+        value, fact = ret(r)
+        ids = [fact["id"]] if fact else []
+        if i == 0:
+            items.append({"symbol": r["symbol"], "decision": "advance",
+                          "reason": f"strongest 12-month return ({value})", "evidence_ids": ids})
+        elif i == len(ranked) - 1 and not r.get("answering") and len(ranked) > 2:
+            items.append({"symbol": r["symbol"], "decision": "dig",
+                          "reason": "weakest; check the latest guidance",
+                          "questions": ["revenue guidance next quarter"], "evidence_ids": ids})
+        else:
+            items.append({"symbol": r["symbol"], "decision": "hold",
+                          "reason": "nothing decisive", "evidence_ids": ids})
+    return json.dumps({"final": {"items": items, "notes": "scripted screen"}})
+
+
 def fake_assessment_responder(system: str, user: str) -> str:
     data = json.loads(user)
+    if "reports" in data:
+        return fake_screen(data)
     facts = data["facts"]
     if "committee_questions" in data:
         results = data.get("tool_results") or []
