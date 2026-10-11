@@ -186,9 +186,13 @@ class SecSource:
 
     def filings(self, symbol: str, form: str, as_of: date, limit: int = 1,
                 since: date | None = None) -> list[Any]:
-        """Most recent filings of `form` filed on or before as_of (newest first)."""
+        """Most recent filings of `form` filed on or before as_of (newest first).
+        Originals are preferred; amendments (e.g. 10-K/A, often only Part III) are
+        used only when no original is available."""
+        listed = list(self.company(symbol).get_filings(form=form) or [])
+        originals = [f for f in listed if str(getattr(f, "form", form)).upper() == form.upper()]
         out = []
-        for f in self.company(symbol).get_filings(form=form) or []:
+        for f in originals or listed:
             filed = f.filing_date if isinstance(f.filing_date, date) else \
                 date.fromisoformat(str(f.filing_date)[:10])
             if filed > as_of:

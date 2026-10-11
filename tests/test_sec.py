@@ -141,3 +141,15 @@ def test_repeated_searches_do_not_refetch(src):
     for q in ("chips", "competition", "datacenter", "pricing", "suppliers"):
         src.search("EX", date(2026, 10, 9), q)
     assert calls["n"] == 3   # 10-K, 10-Q, 8-K listed once each, not once per query
+
+
+def test_originals_preferred_over_amendments(tmp_path):
+    class Amended(FakeCompany):
+        def get_filings(self, form):
+            base = super().get_filings(form)
+            if form == "10-K":
+                return [FakeFiling("10-K/A", date(2026, 8, 20), "ka", FakeObj(1))] + base
+            return base
+
+    src = SecSource("Qfii t@e.x", tmp_path, lambda s: Amended())
+    assert src.fundamentals("EX", date(2026, 10, 9))["annual"]["accession"] == "k2"

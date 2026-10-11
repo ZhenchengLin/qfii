@@ -138,3 +138,29 @@ async def test_research_uses_fundamentals_and_macro_when_present(cfg):
     kinds = {e.kind for e in packet.evidence}
     assert kinds == {"price", "calc", "filing", "macro"}
     assert any("excess_return_12m" == e.payload.get("name") for e in packet.evidence)
+
+
+def test_ensure_prices_downloads_missing_and_stale_only(tmp_path, monkeypatch):
+    from qfii import data_fetch
+    from qfii.tools.market import DataError
+
+    monkeypatch.setattr(data_fetch, "_TRIED", set())
+    calls = []
+
+    def handler(req):
+        calls.append(str(req.url))
+        return httpx.Response(200, json=yahoo_payload())
+
+    http = client(handler)
+    data_fetch.ensure_prices(tmp_path, "NEW", date(2026, 10, 9), http)
+    assert (tmp_path / "NEW.csv").exists() and len(calls) == 1
+    data_fetch.ensure_prices(tmp_path, "NEW", date(2026, 10, 9), http)  # fresh: no fetch
+    assert len(calls) == 1
+    (tmp_path / "OLD.csv").write_text("date,close,volume\n2026-09-01,10,1\n")
+    data_fetch.ensure_prices(tmp_path, "OLD", date(2026, 10, 9), http)  # stale: refetch
+    assert len(calls) == 2
+    data_fetch.ensure_prices(tmp_path, "OLD", date(2026, 9, 2), http)   # old as_of: fine
+    assert len(calls) == 2
+    missing = client(lambda r: httpx.Response(404, json={"chart": {"result": None}}))
+    with pytest.raises(DataError, match="not found on Yahoo Finance"):
+        data_fetch.ensure_prices(tmp_path, "ZZZQX", date(2026, 10, 9), missing)

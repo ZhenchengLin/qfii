@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import date
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError as McpToolError
 
 from ..config import Config
 from .fundamentals import fundamentals, load_facts
@@ -39,7 +40,21 @@ def build_tool_server(cfg: Config) -> MCPServer:
     )
 
     def _bars(symbol: str, as_of: str):
-        return load_prices(cfg.data_source, cfg.csv_dir, symbol.upper(), date.fromisoformat(as_of))
+        # Errors become MCP ToolErrors: other exceptions reach the agent as a bare
+        # "Error executing tool" with the reason hidden.
+        try:
+            day = date.fromisoformat(as_of)
+        except ValueError as exc:
+            raise McpToolError(f"as_of must be YYYY-MM-DD, got {as_of!r}") from exc
+        sym = symbol.upper()
+        try:
+            if cfg.data_source == "csv":
+                from ..data_fetch import ensure_prices
+
+                ensure_prices(cfg.csv_dir, sym, day)
+            return load_prices(cfg.data_source, cfg.csv_dir, sym, day)
+        except DataError as exc:
+            raise McpToolError(str(exc)) from exc
 
     @server.tool()
     def get_price_history(symbol: str, as_of: str, last_n: int = 260) -> dict:

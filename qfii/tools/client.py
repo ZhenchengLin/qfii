@@ -15,6 +15,13 @@ class ToolError(RuntimeError):
     pass
 
 
+def root_cause(exc: BaseException) -> BaseException:
+    """The first real error inside (possibly nested) ExceptionGroups from task groups."""
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        exc = exc.exceptions[0]
+    return exc
+
+
 class ToolBox:
     def __init__(self, cfg: Config):
         target = cfg.mcp_url or build_tool_server(cfg)
@@ -36,7 +43,7 @@ class ToolBox:
         text = "".join(getattr(c, "text", "") for c in result.content)
         self.calls.append({"tool": name, "arguments": arguments, "is_error": result.is_error})
         if result.is_error:
-            raise ToolError(f"{name} failed: {text}")
+            raise ToolError(f"{name} failed: {text.removeprefix(f'Error executing tool {name}: ')}")
         if result.structured_content is not None:
             return dict(result.structured_content)
         try:

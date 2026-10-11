@@ -181,7 +181,10 @@ class DebateServer:
                       "rounds": sum(len(d.rounds) for d in result.debates),
                       "debate_id": result.debate_id})
         except Exception as exc:  # noqa: BLE001 - report any failure to the page
-            run.emit({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+            from ..tools.client import root_cause
+
+            cause = root_cause(exc)
+            run.emit({"type": "error", "message": str(cause) or type(cause).__name__})
         finally:
             run.done = True
             run.changed.set()

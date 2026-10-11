@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -44,9 +44,15 @@ def _get(http: httpx.Client, url: str, **kwargs) -> httpx.Response:
 
 def fetch_yahoo_prices(http: httpx.Client, symbol: str, range_: str = "5y") -> list[Bar]:
     """Daily bars; close is the split- and dividend-adjusted close."""
-    resp = _get(http, YAHOO_URL.format(symbol=symbol),
-                params={"range": range_, "interval": "1d", "events": "div,splits"},
-                headers={"User-Agent": BROWSER_UA})
+    try:
+        resp = _get(http, YAHOO_URL.format(symbol=symbol),
+                    params={"range": range_, "interval": "1d", "events": "div,splits"},
+                    headers={"User-Agent": BROWSER_UA})
+    except FetchError as exc:
+        if "HTTP 404" in str(exc):
+            raise FetchError(f"{symbol} not found on Yahoo Finance (wrong or delisted "
+                             f"ticker?)") from exc
+        raise
     chart = resp.json().get("chart", {})
     if chart.get("error") or not chart.get("result"):
         raise FetchError(f"{symbol}: {chart.get('error') or 'no data'}")
@@ -127,3 +133,42 @@ def write_facts(fund_dir: Path, symbol: str, facts: dict) -> Path:
     path = fund_dir / f"{symbol}.json"
     path.write_text(json.dumps(facts))
     return path
+
+
+_TRIED: set[tuple[str, str]] = set()   # (symbol, target date) already fetched this process
+STALE_AFTER_DAYS = 4
+
+
+def _last_date(path: Path) -> date | None:
+    with path.open() as fh:
+        lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+    return date.fromisoformat(lines[-1].split(",")[0]) if len(lines) > 1 else None
+
+
+def ensure_prices(csv_dir: Path, symbol: str, as_of: date,
+                  http: httpx.Client | None = None) -> None:
+    """Download prices for a symbol on first use, or when they are stale for as_of.
+    Raises DataError if there is still no price file afterwards."""
+    from .tools.market import DataError
+
+    path = csv_dir / f"{symbol}.csv"
+    target = min(as_of, date.today())
+    if path.exists():
+        last = _last_date(path)
+        if last and (target - last).days <= STALE_AFTER_DAYS:
+            return
+    key = (symbol, target.isoformat())
+    if key in _TRIED:
+        if path.exists():
+            return
+        raise DataError(f"no price data for {symbol} (download failed earlier)")
+    _TRIED.add(key)
+    client = http or httpx.Client(timeout=30, follow_redirects=True)
+    try:
+        write_prices(csv_dir, symbol, fetch_yahoo_prices(client, symbol))
+    except FetchError as exc:
+        if not path.exists():
+            raise DataError(f"no price data for {symbol}: {exc}") from exc
+    finally:
+        if http is None:
+            client.close()
