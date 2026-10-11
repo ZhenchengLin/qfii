@@ -89,6 +89,14 @@ For the demo, the GPU setup is needed: ~30 min per stock is too slow to show liv
 | Risk & Validation "did no research" (`input_value=[]`) | Lab data showed it did; our validator rejected uncited missing-data findings and long answers. `data_gap` items are now allowed. Risk uses the same tools and searches filings with the committee's questions |
 | Members may agree just to beat the 3-round limit | Members no longer see the round count or a final-round flag; the prompt says no consensus is legitimate; a changed vote must state what changed it (code-enforced). Open: A/B test hidden vs visible limit |
 
+## Amendments (Zhen, 2026-10-11)
+
+Members can put their own deal on the table (`propose`: size, holding period,
+stop-loss, take-profit, conditions, summary) and back any amendment on the table
+(`support A1`). All three backing one amendment is a decision on its terms;
+the decision stores the amendment id and terms. Switching which deal you back
+needs `changed_because`, like any vote change.
+
 ## Cisco track fit
 
 | Level | Qfii |

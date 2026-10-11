@@ -102,12 +102,20 @@ class DebateServer:
                                    "ORDER BY id DESC LIMIT 1", (paper_id,)).fetchone()
         body = json.loads(packet[0]) if packet else {}
         rounds: dict[int, dict[str, Any]] = {}
-        for rnd, member, action, size_usd, repl, target, request, argument in self.conn.execute(
+        amendments: dict[str, dict[str, Any]] = {}
+        for (rnd, member, action, size_usd, repl, target, request, argument, aid,
+             ajson) in self.conn.execute(
                 "SELECT round, member, action, size_usd, replace_symbol, target, request, "
-                "argument FROM ballots WHERE debate_id = ? ORDER BY round, id", (did,)):
+                "argument, amendment_id, amendment_json FROM ballots WHERE debate_id = ? "
+                "ORDER BY round, id", (did,)):
             ballot = {"member": member, "action": action, "argument": argument}
             ballot.update({k: v for k, v in (("size_usd", size_usd), ("replace_symbol", repl),
-                                             ("target", target), ("request", request)) if v})
+                                             ("target", target), ("request", request),
+                                             ("amendment_id", aid)) if v})
+            if ajson:
+                ballot["amendment"] = json.loads(ajson)
+                amendments[aid] = {**ballot["amendment"], "proposed_by": member,
+                                   "proposed_in_round": rnd}
             rounds.setdefault(rnd, {"round": rnd, "ballots": [], "reports": []})
             rounds[rnd]["ballots"].append(ballot)
         for rnd, team, questions, report in self.conn.execute(
@@ -122,18 +130,29 @@ class DebateServer:
 
         for rnd in rounds.values():
             ballots = [Ballot(**b) for b in rnd["ballots"]]
+            for b, raw in zip(ballots, rnd["ballots"], strict=True):
+                b.amendment_id = raw.get("amendment_id")   # engine-assigned on propose
             if len(ballots) == len(COMMITTEE):
-                result = tally(ballots, self.cfg.committee)
+                result = tally(ballots, self.cfg.committee, amendments)
                 rnd["result"], rnd["detail"] = result.kind, result.detail
         return {
             "id": did, "symbol": symbol, "outcome": outcome, "rounds_used": rounds_used,
             "started_at": started, "size_usd": size,
             "proposal": json.loads(proposal_json) if proposal_json else None,
+            "amendments": [{"id": k, **v} for k, v in amendments.items()],
+            "decision_terms": self._decision_terms(did),
             "research": {"as_of": body.get("as_of"),
                          "observations": body.get("observations", []),
                          "flags": body.get("quality_flags", [])},
             "rounds": [rounds[k] for k in sorted(rounds)],
         }
+
+    def _decision_terms(self, debate_id: int) -> dict[str, Any] | None:
+        row = self.conn.execute("SELECT amendment_id, terms_json FROM decisions "
+                                "WHERE debate_id = ?", (debate_id,)).fetchone()
+        if not row or not row[0]:
+            return None
+        return {"amendment_id": row[0], **json.loads(row[1] or "{}")}
 
     # ------------------------------------------------------------ live runs
     def start(self, symbol: str, as_of: date | None) -> Run:
@@ -165,6 +184,8 @@ class DebateServer:
             run.emit({"type": "round", "round": rec.round, "result": rec.outcome.kind,
                       "detail": rec.outcome.detail, "votes": rec.outcome.votes,
                       "size_usd": rec.outcome.size_usd,
+                      "amendment_id": rec.outcome.amendment_id,
+                      "amendment": rec.outcome.amendment,
                       "reports": [{"team": r["team"], "requests": r["requests"],
                                    "report": r["report"]} for r in rec.reports]})
 
@@ -178,6 +199,8 @@ class DebateServer:
             last = result.debate
             run.emit({"type": "outcome", "outcome": result.outcome,
                       "size_usd": last.size_usd if last else None,
+                      "terms": ({"amendment_id": last.final.amendment_id, **last.final.amendment}
+                                if last and last.final and last.final.amendment else None),
                       "rounds": sum(len(d.rounds) for d in result.debates),
                       "debate_id": result.debate_id})
         except Exception as exc:  # noqa: BLE001 - report any failure to the page

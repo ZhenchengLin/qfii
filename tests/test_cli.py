@@ -6,7 +6,7 @@ def test_init_and_config(tmp_path, capsys):
     cfg.write_text(f'[paths]\ndb = "{tmp_path / "x.db"}"\n')
     assert cli.main(["--config", str(cfg), "init"]) == 0
     out = capsys.readouterr().out
-    assert "initialised (schema v3)" in out and "$100,000.00" in out
+    assert "initialised (schema v4)" in out and "$100,000.00" in out
     assert cli.main(["--config", str(cfg), "init"]) == 0
     assert "already initialised" in capsys.readouterr().out
     assert cli.main(["--config", str(cfg), "config"]) == 0

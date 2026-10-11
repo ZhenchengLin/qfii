@@ -126,3 +126,38 @@ def test_data_gap_claims_need_no_citation():
     report = RiskReport(symbol="X", as_of="2026-10-09", findings=[
         RiskFinding(issue="No news coverage", severity="medium", data_gap=True)])
     assert report.findings[0].data_gap
+
+
+TERMS = {"size_usd": 4000.0, "summary": "smaller with a stop", "stop_loss_pct": 15.0,
+         "proposed_by": "conservative", "proposed_in_round": 1}
+
+
+def amend(member, action, aid, size=4000.0):
+    extra = {"amendment": {"size_usd": size, "summary": "smaller with a stop"}} \
+        if action == "propose" else {}
+    ballot = Ballot(member=member, action=action, argument="x", amendment_id=aid, **extra)
+    ballot.amendment_id = aid
+    return ballot
+
+
+def test_unanimous_backing_of_an_amendment_is_a_decision_on_its_terms():
+    ballots = [amend("aggressive", "support", "A1"), amend("conservative", "support", "A1"),
+               amend("neutral", "support", "A1")]
+    out = tally(ballots, RULES, {"A1": TERMS})
+    assert (out.kind, out.amendment_id, out.size_usd) == ("invest", "A1", 4000.0)
+    assert out.amendment["stop_loss_pct"] == 15.0
+
+
+def test_split_amendment_backing_continues():
+    ballots = [amend("aggressive", "propose", "A2", 8000), amend("conservative", "support", "A1"),
+               amend("neutral", "support", "A1")]
+    out = tally(ballots, RULES, {"A1": TERMS, "A2": {**TERMS, "size_usd": 8000}})
+    assert out.kind == "continue" and "A1 by conservative/neutral" in out.detail
+    assert tally(ballots, MAJORITY, {"A1": TERMS, "A2": TERMS}).amendment_id == "A1"
+
+
+def test_ballot_needs_terms_or_id():
+    with pytest.raises(ValueError, match="propose needs an amendment"):
+        Ballot(member="neutral", action="propose", argument="x")
+    with pytest.raises(ValueError, match="support needs amendment_id"):
+        Ballot(member="neutral", action="support", argument="x")

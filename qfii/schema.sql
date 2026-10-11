@@ -134,7 +134,8 @@ CREATE TABLE ballots (
     round           INTEGER NOT NULL CHECK (round BETWEEN 1 AND 10),
     member          TEXT NOT NULL CHECK (member IN ('aggressive', 'conservative', 'neutral')),
     action          TEXT NOT NULL CHECK (action IN ('invest', 'replace', 'pass', 'request_info',
-                                                    'send_back', 'abstain')),
+                                                    'send_back', 'propose', 'support',
+                                                    'abstain')),
     size_usd        REAL CHECK (size_usd IS NULL OR size_usd > 0),
     replace_symbol  TEXT,
     target          TEXT CHECK (target IN ('assessment', 'risk', 'both')),
@@ -142,6 +143,8 @@ CREATE TABLE ballots (
     argument        TEXT NOT NULL,
     llm_call_id     INTEGER REFERENCES llm_calls(id),
     created_at      TEXT NOT NULL,
+    amendment_id    TEXT,            -- propose: the id it received; support: the id backed
+    amendment_json  TEXT,            -- propose: the proposed terms
     UNIQUE (debate_id, round, member),
     CHECK (action NOT IN ('invest', 'replace') OR size_usd IS NOT NULL),
     CHECK (action <> 'replace' OR replace_symbol IS NOT NULL),
@@ -171,7 +174,9 @@ CREATE TABLE decisions (
     size_usd        REAL,
     replace_symbol  TEXT,
     rounds          INTEGER NOT NULL,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    amendment_id    TEXT,            -- set when the committee agreed on a member's amendment
+    terms_json      TEXT
 );
 
 -- Private memory per committee member. A member's prompt only ever includes its

@@ -108,3 +108,27 @@ def test_v2_ballots_table_gets_abstain(tmp_path):
                  "VALUES (1, 2, 'neutral', 'abstain', 'x', 'now')")
     assert conn.execute("SELECT COUNT(*) FROM ballots").fetchone()[0] == 2
     assert 3 in MIGRATIONS
+
+
+def test_v3_database_gets_amendment_columns(tmp_path):
+    path = tmp_path / "v3.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE ballots (id INTEGER PRIMARY KEY, debate_id INTEGER, round INTEGER, "
+                 "member TEXT, action TEXT CHECK (action IN ('pass', 'abstain')), size_usd REAL, "
+                 "replace_symbol TEXT, target TEXT, request TEXT, argument TEXT, "
+                 "llm_call_id INTEGER, created_at TEXT)")
+    conn.execute("CREATE TABLE decisions (id INTEGER PRIMARY KEY, paper_id INTEGER, "
+                 "debate_id INTEGER, decision TEXT, size_usd REAL, replace_symbol TEXT, "
+                 "rounds INTEGER, created_at TEXT)")
+    conn.execute("INSERT INTO ballots VALUES (1, 1, 1, 'neutral', 'pass', NULL, NULL, NULL, NULL, "
+                 "'a', NULL, 'now')")
+    conn.execute("PRAGMA user_version = 3")
+    conn.commit()
+    conn.close()
+    conn = connect(path)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    init_db(conn, 1000)
+    conn.execute("INSERT INTO ballots (debate_id, round, member, action, argument, created_at, "
+                 "amendment_id) VALUES (1, 2, 'neutral', 'support', 'x', 'now', 'A1')")
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(decisions)")]
+    assert "terms_json" in cols and conn.execute("SELECT COUNT(*) FROM ballots").fetchone()[0] == 2

@@ -35,7 +35,7 @@ Every message format is a Pydantic model in `qfii/contracts.py`. `qfii schemas` 
 | `EvidencePacket` | Research → Assessment | in use |
 | `Proposal` | Assessment → committee | **draft, Ben to approve** |
 | `RiskReport` | Risk & Validation → committee, only when commissioned | **draft, Ben to approve** |
-| `Ballot` | each committee member, each round | in use |
+| `Ballot` | each committee member, each round (incl. `propose` with an `Amendment`, `support` by id) | in use |
 | `PortfolioSnapshot` | code → Assessment, Risk and committee (not Research) | in use |
 
 ### Draft `Proposal` (the TAs' paper)

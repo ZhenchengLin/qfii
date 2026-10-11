@@ -287,3 +287,57 @@ async def test_default_committee_debates_up_to_five_rounds():
                Scripted("neutral", *[INV] * 5)]
     result = await run_debate(dossier(), members, Teams(), rules)
     assert result.outcome == "no_consensus" and len(result.rounds) == 5
+
+
+PROPOSE = {"action": "propose", "amendment": {"size_usd": 4000, "summary": "half size, 15% stop",
+                                              "stop_loss_pct": 15}}
+SUPPORT_A1 = {"action": "support", "amendment_id": "A1"}
+
+
+async def test_members_negotiate_through_an_amendment():
+    c = Scripted("conservative", PROPOSE, SUPPORT_A1)
+    a = Scripted("aggressive", INV, {**SUPPORT_A1, "changed_because": "a stop answers my risk"})
+    n = Scripted("neutral", PASS, SUPPORT_A1)
+    result = await run_debate(dossier(), [a, c, n], Teams(), RULES)
+    assert result.outcome == "invest" and result.final.amendment_id == "A1"
+    assert result.size_usd == 4000 and result.final.amendment["stop_loss_pct"] == 15
+    table = a.views[1].as_prompt_dict()["amendments_on_the_table"]
+    assert table[0]["id"] == "A1" and table[0]["proposed_by"] == "conservative"
+    assert a.views[0].as_prompt_dict()["amendments_on_the_table"] == []
+
+
+async def test_llm_member_cannot_back_a_missing_amendment_or_oversize():
+    replies = iter([json.dumps({"action": "support", "amendment_id": "A9", "argument": "x"}),
+                    json.dumps({"action": "propose", "argument": "big",
+                                "amendment": {"size_usd": 50000, "summary": "go big"}})])
+    fallback = json.dumps({"action": "pass", "argument": "pass"})
+    llm = FakeLLM(lambda s, u: next(replies, fallback))
+    member = LLMMember("aggressive", llm)
+    others = [Scripted("conservative", *[PASS] * 3), Scripted("neutral", *[PASS] * 3)]
+    result = await run_debate(dossier(), [member, *others], Teams(), RULES)
+    assert "A9 is not on the table" in llm.prompts[1][1]
+    assert result.rounds[0].ballots[0].action == "abstain"   # oversize retry failed too
+
+
+async def test_amendment_decision_is_saved_and_shown(cfg):
+    from qfii.store import save_debate
+    from qfii.web.app import build_app
+
+    conn = connect(cfg.db_path)
+    init_db(conn, cfg.limits.starting_cash_usd)
+    from qfii.papers import create_paper, transition
+    with conn:
+        pid = create_paper(conn, "AAPL", "user", "research")
+        transition(conn, pid, "packet_ready", "research")
+        transition(conn, pid, "proposal", "assessment")
+    members = [Scripted("conservative", PROPOSE, SUPPORT_A1),
+               Scripted("aggressive", INV, {**SUPPORT_A1, "changed_because": "ok"}),
+               Scripted("neutral", PASS, SUPPORT_A1)]
+    result = await run_debate(dossier(), members, Teams(), RULES)
+    did = save_debate(conn, pid, "AAPL", result)
+    row = conn.execute("SELECT amendment_id, terms_json FROM decisions").fetchone()
+    assert row[0] == "A1" and json.loads(row[1])["stop_loss_pct"] == 15
+    detail = build_app(cfg).state.server.debate(did)
+    assert detail["decision_terms"]["amendment_id"] == "A1"
+    assert detail["amendments"][0]["proposed_by"] == "conservative"
+    assert [r["result"] for r in detail["rounds"]] == ["continue", "invest"]

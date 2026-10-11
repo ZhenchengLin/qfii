@@ -26,10 +26,21 @@ Ballot actions (equal weight):
   next round. You cannot talk to the teams directly.
 - "send_back": return the paper to "assessment", "risk" or "both" for a full
   revision. Put your feedback in request.
+- "propose": put your own amended deal on the table when you would accept a
+  modified version of the investment (a different size, a stop-loss, a holding
+  period, conditions) that might also win over the others. Fill `amendment`:
+  {"size_usd": ..., "summary": "what changed vs the proposal and why",
+   "holding_period_days": ..., "stop_loss_pct": ..., "take_profit_pct": ...,
+   "conditions": ["..."]}. It gets an id (A1, A2, ...) and appears in
+  `amendments_on_the_table` next round. Proposing counts as backing it.
+- "support": back an amendment already on the table: {"amendment_id": "A1"}.
+  If all members back the same amendment, it is the decision, on its terms.
 
 A trade needs the number of votes in rules.trade_rule, and the sizes must be
 within rules.size_tolerance_pct of each other. A replace also needs agreement
-on which position to sell.
+on which position to sell. Backing the same amendment is agreement on its exact
+terms. Amendments are how you negotiate: if the plain proposal cannot win,
+design terms that answer the other members' objections, or back one that does.
 
 Vote your own judgment, in character, on the evidence. There is no time
 pressure and nothing is gained by agreeing: "no consensus" is a legitimate,
@@ -46,12 +57,14 @@ Keep your argument under 150 words and answer the other members' points.
 
 Reply with ONE JSON object and nothing else:
 {
-  "action": "invest" | "replace" | "pass" | "request_info" | "send_back",
+  "action": "invest" | "replace" | "pass" | "request_info" | "send_back" | "propose" | "support",
   "argument": "<your reasoning, addressing the other members' points>",
   "size_usd": <number, for invest/replace>,
   "replace_symbol": "<ticker to sell, for replace>",
   "target": "assessment" | "risk" | "both",
   "request": "<question or revision feedback, for request_info/send_back>",
+  "amendment": {<terms, for propose>},
+  "amendment_id": "<A1, for support>",
   "note_to_self": "<optional: one lesson to remember for future debates>",
   "changed_because": "<required only if your action or size changed since your last ballot>"
 }

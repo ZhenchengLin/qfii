@@ -7,10 +7,14 @@ Three members, equal weight. Each round every member casts one ballot:
   pass          do not invest
   request_info  ask a team (assessment / risk / both) for a report everyone sees
   send_back     return the paper to a team for full revision, with feedback
+  propose       put an amended deal on the table (size + terms); counts as backing it
+  support       back an amendment already on the table, by its id (A1, A2, ...)
 
 Trading actions (invest, replace, pass) need `invest_rule` votes; invest and
 replace also need agreement on the size (all within size_tolerance_pct; the
-median is used) and, for replace, on which position to sell. Procedural actions
+median is used) and, for replace, on which position to sell. Backing the same
+amendment (propose + support) also needs `invest_rule` votes; its terms are
+fixed, so that is agreement on the size and terms. Procedural actions
 (request_info, send_back) need `procedural_rule` votes. Anything else: no
 decision this round.
 """
@@ -34,6 +38,8 @@ class RoundOutcome:
     votes: dict[str, int]
     size_usd: float | None = None
     replace_symbol: str | None = None
+    amendment_id: str | None = None
+    amendment: dict | None = None          # agreed terms when the outcome is an amendment
     teams: list[str] = field(default_factory=list)
     requests: list[str] = field(default_factory=list)
     detail: str = ""
@@ -55,7 +61,11 @@ def _teams(ballots: list[Ballot]) -> list[str]:
     return sorted(teams)
 
 
-def tally(ballots: list[Ballot], rules: Committee) -> RoundOutcome:
+def tally(ballots: list[Ballot], rules: Committee,
+          amendments: dict[str, dict] | None = None) -> RoundOutcome:
+    """amendments: id -> terms for every amendment on the table (including ones
+    proposed this round, whose ballots carry their assigned amendment_id)."""
+    amendments = amendments or {}
     counts = Counter(b.action for b in ballots)
     votes = dict(counts)
     by_action: dict[str, list[Ballot]] = {}
@@ -83,6 +93,20 @@ def tally(ballots: list[Ballot], rules: Committee) -> RoundOutcome:
         return RoundOutcome(action, votes, size_usd=round(statistics.median(sizes), 2),
                             replace_symbol=group[0].replace_symbol,
                             detail=f"{len(group)} of {len(ballots)} {action}, sizes {sorted(sizes)}")
+
+    backers: dict[str, list[Ballot]] = {}
+    for b in ballots:
+        if b.action in ("propose", "support") and b.amendment_id:
+            backers.setdefault(b.amendment_id, []).append(b)
+    for aid, group in sorted(backers.items(), key=lambda kv: -len(kv[1])):
+        if len(group) >= trade_need and aid in amendments:
+            terms = amendments[aid]
+            return RoundOutcome("invest", votes, size_usd=terms["size_usd"], amendment_id=aid,
+                                amendment=terms,
+                                detail=f"{len(group)} of {len(ballots)} back amendment {aid}")
+    if backers:
+        blocked.append("amendment backing: " + ", ".join(
+            f"{aid} by {'/'.join(b.member for b in g)}" for aid, g in sorted(backers.items())))
 
     proc_need = votes_needed(rules.procedural_rule, len(ballots))
     for action in PROCEDURAL_ACTIONS:

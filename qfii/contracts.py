@@ -114,8 +114,29 @@ class EvidencePacket(BaseModel):
 Member = Literal["aggressive", "conservative", "neutral"]
 # "abstain" is never offered to a model: the engine records it when a member
 # produces no valid ballot, and it counts toward nothing.
-BallotAction = Literal["invest", "replace", "pass", "request_info", "send_back", "abstain"]
+BallotAction = Literal["invest", "replace", "pass", "request_info", "send_back", "propose",
+                       "support", "abstain"]
 Team = Literal["assessment", "risk", "both"]
+
+
+class Amendment(BaseModel):
+    """A member's modified deal: the committee can rally around it instead of the
+    Assessment proposal. Terms are fixed, so backing it means agreeing on the size."""
+
+    size_usd: float = Field(gt=0)
+    summary: str = Field(min_length=1, max_length=600)   # what changed vs. the proposal, and why
+    holding_period_days: int | None = Field(default=None, gt=0, le=3650)
+    stop_loss_pct: float | None = Field(default=None, gt=0, lt=100)    # exit if down this much
+    take_profit_pct: float | None = Field(default=None, gt=0, le=1000)  # exit if up this much
+    conditions: list[str] = Field(default_factory=list, max_length=5)   # e.g. review triggers
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_empty(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data = {k: v for k, v in data.items()
+                    if v not in ("", 0, None) or k in ("size_usd", "summary")}
+        return data
 
 
 class Ballot(BaseModel):
@@ -130,6 +151,8 @@ class Ballot(BaseModel):
     request: str | None = Field(default=None, max_length=1500)
     note_to_self: str | None = Field(default=None, max_length=500)
     changed_because: str | None = Field(default=None, max_length=800)
+    amendment: Amendment | None = None        # for propose
+    amendment_id: str | None = None           # for support (and set on propose by the engine)
 
     @model_validator(mode="before")
     @classmethod
@@ -141,13 +164,15 @@ class Ballot(BaseModel):
         data = {k: v for k, v in data.items()
                 if not (isinstance(v, str) and not v.strip() and k != "argument")}
         action = data.get("action")
-        unused = {"invest": ("replace_symbol", "target", "request"),
-                  "replace": ("target", "request"),
-                  "request_info": ("size_usd", "replace_symbol"),
-                  "send_back": ("size_usd", "replace_symbol")}.get(
-            action, ("size_usd", "replace_symbol", "target", "request"))
-        for key in unused:
+        all_optional = ("size_usd", "replace_symbol", "target", "request", "amendment",
+                        "amendment_id")
+        used = {"invest": ("size_usd",), "replace": ("size_usd", "replace_symbol"),
+                "request_info": ("target", "request"), "send_back": ("target", "request"),
+                "propose": ("amendment", "amendment_id"), "support": ("amendment_id",)}
+        for key in set(all_optional) - set(used.get(action, ())):
             data.pop(key, None)
+        if isinstance(data.get("amendment_id"), str):
+            data["amendment_id"] = data["amendment_id"].strip().upper()
         return data
 
     @model_validator(mode="after")
@@ -158,6 +183,10 @@ class Ballot(BaseModel):
             raise ValueError("replace needs replace_symbol (the position to sell)")
         if self.action in ("request_info", "send_back") and not (self.target and self.request):
             raise ValueError(f"{self.action} needs target and request")
+        if self.action == "propose" and self.amendment is None:
+            raise ValueError("propose needs an amendment (size_usd, summary, optional terms)")
+        if self.action == "support" and not self.amendment_id:
+            raise ValueError("support needs amendment_id, e.g. \"A1\"")
         if self.action not in ("invest", "replace"):
             self.size_usd = None
         if self.action != "replace":

@@ -15,7 +15,10 @@ about them before any (paper) money moves.
 
 The three committee members replace a single Central Allocator. Each round they
 argue and cast equal-weight ballots: invest, replace (sell a holding for this
-one), pass, request more info from a team, or send the stock back for revision.
+one), pass, request more info from a team, send the stock back for revision,
+propose an amended deal (size, stop-loss, holding period, conditions), or
+support an amendment already on the table; if all back the same amendment,
+its terms are the decision.
 Trades need consensus on the action and the size; after 5 rounds without one,
 the stock is shelved. Each member keeps its own private memory. Order execution
 is deterministic code. Watch a debate with `qfii debate NVDA --as-of 2026-10-09`.

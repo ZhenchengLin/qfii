@@ -84,6 +84,9 @@ details summary { cursor: pointer; font-weight: 600; }
 .request { font-size: 13px; color: var(--info); margin: 0 0 6px; }
 .argument { margin: 0; font-size: 14px; white-space: pre-wrap; }
 .changed { margin: 0 0 6px; font-size: 13px; color: var(--warn); font-style: italic; }
+.amend { margin: 0 0 8px; padding: 8px 10px; border: 1px dashed var(--c); border-radius: 8px;
+  background: var(--soft); font-size: 13px; }
+.amend p { margin: 4px 0 0; } .amend .cond { color: var(--muted); }
 .waiting { color: var(--muted); font-size: 14px; margin-top: 10px; }
 .waiting::after { content: "…"; animation: pulse 1.2s infinite; }
 .result { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px;
@@ -172,6 +175,8 @@ function actionLabel(b) {
     case "replace": return `REPLACE ${b.replace_symbol} with ${money(b.size_usd)}`;
     case "request_info": return "ASK " + (b.target || "").toUpperCase();
     case "send_back": return "SEND BACK to " + (b.target || "").toUpperCase();
+    case "propose": return `PROPOSE ${b.amendment_id || "amendment"}: ${money(b.amendment.size_usd)}`;
+    case "support": return "SUPPORT " + b.amendment_id;
     default: return b.action.toUpperCase();
   }
 }
@@ -315,11 +320,26 @@ function roundBox(n) {
   return box;
 }
 
+function termsText(t) {
+  const parts = [money(t.size_usd)];
+  if (t.holding_period_days) parts.push(`hold ~${t.holding_period_days} days`);
+  if (t.stop_loss_pct) parts.push(`stop-loss ${t.stop_loss_pct}%`);
+  if (t.take_profit_pct) parts.push(`take-profit ${t.take_profit_pct}%`);
+  return parts.join(" · ");
+}
+
 function renderBallot(n, b) {
   const card = $(`[data-member="${b.member}"]`, roundBox(n));
   card.replaceChildren(card.firstChild);
   card.append(el("span", "action", actionLabel(b)));
   if (b.request) card.append(el("p", "request", "“" + b.request + "”"));
+  if (b.amendment) {
+    const a = el("div", "amend");
+    a.append(el("b", null, `${b.amendment_id || "Amendment"}: ${termsText(b.amendment)}`));
+    a.append(el("p", null, b.amendment.summary));
+    for (const c of b.amendment.conditions || []) a.append(el("p", "cond", "• " + c));
+    card.append(a);
+  }
   if (b.changed_because) card.append(el("p", "changed", "Changed position because: " + b.changed_because));
   card.append(el("p", "argument", b.argument));
 }
@@ -335,7 +355,9 @@ function renderRoundResult(n, r) {
 function renderOutcome(o) {
   const kind = o.type === "error" ? "error" : o.outcome;
   const text = o.type === "error" ? "Error" :
-    { invest: "Decision: INVEST " + money(o.size_usd), replace: "Decision: REPLACE " + money(o.size_usd),
+    { invest: o.terms ? `Decision: INVEST on amendment ${o.terms.amendment_id} (${termsText(o.terms)})`
+              : "Decision: INVEST " + money(o.size_usd),
+      replace: "Decision: REPLACE " + money(o.size_usd),
       pass: "Decision: PASS", send_back: "Sent back for revision",
       no_consensus: "No consensus: shelved",
       assessment_reject: "Assessment rejected it: no debate",
@@ -399,7 +421,8 @@ async function showDebate(id) {
     for (const b of r.ballots) renderBallot(r.round, b);
     renderRoundResult(r.round, {result: r.result || "", detail: r.detail || "", reports: r.reports});
   }
-  renderOutcome({type: "outcome", outcome: d.outcome, size_usd: d.size_usd, rounds: d.rounds_used});
+  renderOutcome({type: "outcome", outcome: d.outcome, size_usd: d.size_usd, rounds: d.rounds_used,
+                 terms: d.decision_terms});
   loadHistory(id);
 }
 

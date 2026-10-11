@@ -48,6 +48,7 @@ class DebateView:
     transcript: list[dict[str, Any]]
     memory: list[str]
     rules: dict[str, Any]
+    amendments: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def shared_dict(self) -> dict[str, Any]:
         """Identical for all three members in a round (prompt-cache friendly)."""
@@ -60,6 +61,8 @@ class DebateView:
                 "committee votes request_info with target risk; its report then appears "
                 "in additional_reports"),
             "portfolio": self.dossier.portfolio,
+            "amendments_on_the_table": [{"id": aid, **terms}
+                                        for aid, terms in self.amendments.items()],
             "additional_reports": self.info_reports, "previous_rounds": self.transcript,
         }
 
@@ -145,20 +148,29 @@ async def run_debate(dossier: Dossier, members: list[MemberAgent], teams: Teams,
     memories = memories or {}
     reports: list[dict[str, Any]] = []
     rounds: list[RoundRecord] = []
+    amendments: dict[str, dict[str, Any]] = {}   # every amendment ever proposed, by id
 
     for r in range(1, rules.max_rounds + 1):
         transcript = [_transcript_entry(rec) for rec in rounds]
+        on_table = dict(amendments)   # members see amendments from earlier rounds only
         views = [DebateView(m.name, r, rules.max_rounds, dossier, list(reports), transcript,
-                            list(memories.get(m.name, [])), _rules(rules, dossier.portfolio))
+                            list(memories.get(m.name, [])), _rules(rules, dossier.portfolio),
+                            on_table)
                  for m in members]
+
         async def vote(m: MemberAgent, v: DebateView, r: int = r) -> Ballot:
             ballot = await _ballot(m, v)
+            if ballot.action == "propose" and ballot.amendment is not None:
+                aid = f"A{len(amendments) + 1}"
+                ballot.amendment_id = aid
+                amendments[aid] = {**ballot.amendment.model_dump(exclude_none=True),
+                                   "proposed_by": ballot.member, "proposed_in_round": r}
             if on_ballot:
                 on_ballot(dossier.symbol, r, ballot)
             return ballot
 
         ballots = list(await asyncio.gather(*(vote(m, v) for m, v in zip(members, views))))
-        outcome = tally(ballots, rules)
+        outcome = tally(ballots, rules, amendments)
         rec = RoundRecord(r, ballots, outcome)
         rounds.append(rec)
 

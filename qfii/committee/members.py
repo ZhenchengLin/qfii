@@ -43,11 +43,22 @@ def _previous_ballot(view: DebateView, member: str) -> dict[str, Any] | None:
     return None
 
 
+def _position(action: str, size: float | None, amendment_id: str | None) -> tuple:
+    if action in ("propose", "support"):
+        return ("amendment", amendment_id)   # proposing A1 then supporting A1 is no change
+    return (action, size)
+
+
 def _changed(previous: dict[str, Any], ballot: Ballot) -> bool:
-    if previous["action"] != ballot.action:
+    old = _position(previous["action"], previous.get("size_usd"), previous.get("amendment_id"))
+    if ballot.action == "propose":
+        return True   # a new amendment is a new position
+    new = _position(ballot.action, ballot.size_usd, ballot.amendment_id)
+    if old[0] != new[0] or (old[0] == "amendment" and old[1] != new[1]):
         return True
-    old, new = previous.get("size_usd"), ballot.size_usd
-    return bool(old and new and abs(new - old) / old > 0.01)
+    if old[0] in ("invest", "replace") and old[1] and new[1]:
+        return abs(new[1] - old[1]) / old[1] > 0.01
+    return False
 
 
 def read_member_prompt(user: str) -> dict[str, Any]:
@@ -100,9 +111,15 @@ class LLMMember:
                         f"{' ' + str(ballot.size_usd) if ballot.size_usd else ''}: fill "
                         f"changed_because with the evidence or argument that changed it, or "
                         f"keep your previous vote")
+                if ballot.action == "support" and ballot.amendment_id not in view.amendments:
+                    on_table = ", ".join(view.amendments) or "none yet"
+                    raise ValueError(f"amendment {ballot.amendment_id} is not on the table "
+                                     f"(on the table: {on_table}); support an existing id or "
+                                     f"propose your own")
                 cap = view.rules.get("largest_allowed_order_usd")
-                if cap is not None and ballot.size_usd and ballot.size_usd > cap:
-                    raise ValueError(f"size_usd {ballot.size_usd:,.0f} exceeds "
+                size = ballot.amendment.size_usd if ballot.amendment else ballot.size_usd
+                if cap is not None and size and size > cap:
+                    raise ValueError(f"size_usd {size:,.0f} exceeds "
                                      f"largest_allowed_order_usd {cap:,.0f}")
                 entry["valid"] = True
                 return ballot

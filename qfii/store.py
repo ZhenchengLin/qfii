@@ -105,10 +105,11 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
             for b in rec.ballots:
                 conn.execute(
                     "INSERT INTO ballots (debate_id, round, member, action, size_usd, "
-                    "replace_symbol, target, request, argument, created_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "replace_symbol, target, request, argument, created_at, amendment_id, "
+                    "amendment_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (debate_id, rec.round, b.member, b.action, b.size_usd, b.replace_symbol,
-                     b.target, b.request, b.argument, now),
+                     b.target, b.request, b.argument, now, b.amendment_id,
+                     b.amendment.model_dump_json(exclude_none=True) if b.amendment else None),
                 )
             for rep in rec.reports:
                 conn.execute(
@@ -120,9 +121,11 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
         if result.outcome in ("invest", "replace", "pass"):
             conn.execute(
                 "INSERT INTO decisions (paper_id, debate_id, decision, size_usd, replace_symbol, "
-                "rounds, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "rounds, created_at, amendment_id, terms_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (paper_id, debate_id, result.outcome, result.final.size_usd,
-                 result.final.replace_symbol, len(result.rounds), now),
+                 result.final.replace_symbol, len(result.rounds), now,
+                 result.final.amendment_id,
+                 json.dumps(result.final.amendment) if result.final.amendment else None),
             )
         transition(conn, paper_id, DEBATE_STATE[result.outcome], "committee",
                    f"debate #{debate_id}: {result.outcome} after {len(result.rounds)} round(s)")

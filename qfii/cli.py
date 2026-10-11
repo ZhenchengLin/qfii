@@ -94,6 +94,14 @@ def _print_round(symbol: str, rec) -> None:
             extra += f" (sell {b.replace_symbol})"
         if b.target:
             extra = f" -> {b.target}: {b.request}"
+        if b.action == "support":
+            extra = f" {b.amendment_id}"
+        if b.amendment:
+            a = b.amendment
+            extra = (f" {b.amendment_id}: ${a.size_usd:,.0f}"
+                     + (f", stop-loss {a.stop_loss_pct}%" if a.stop_loss_pct else "")
+                     + (f", hold ~{a.holding_period_days}d" if a.holding_period_days else "")
+                     + f" | {a.summary}")
         print(f"  {b.member:<12} {b.action}{extra}")
         print(f"  {'':<12} {b.argument}")
     print(f"  => {rec.outcome.kind}: {rec.outcome.detail}")
