@@ -1,0 +1,106 @@
+{
+  "description": "One member's argument and equal-weight vote for one round.",
+  "properties": {
+    "member": {
+      "enum": [
+        "aggressive",
+        "conservative",
+        "neutral"
+      ],
+      "title": "Member",
+      "type": "string"
+    },
+    "action": {
+      "enum": [
+        "invest",
+        "replace",
+        "pass",
+        "request_info",
+        "send_back"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "argument": {
+      "maxLength": 3000,
+      "minLength": 1,
+      "title": "Argument",
+      "type": "string"
+    },
+    "size_usd": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Usd"
+    },
+    "replace_symbol": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Replace Symbol"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "enum": [
+            "assessment",
+            "risk",
+            "both"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target"
+    },
+    "request": {
+      "anyOf": [
+        {
+          "maxLength": 1500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Request"
+    },
+    "note_to_self": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note To Self"
+    }
+  },
+  "required": [
+    "member",
+    "action",
+    "argument"
+  ],
+  "title": "Ballot",
+  "type": "object"
+}

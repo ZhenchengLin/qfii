@@ -186,3 +186,74 @@ def ballot_reply_schema() -> dict[str, Any]:
     schema["properties"].pop("member", None)
     schema["required"] = [r for r in schema.get("required", []) if r != "member"]
     return schema
+
+
+# ---------------------------------------------------------------- DRAFT team reports
+# Proposed formats for Ben to approve. Every claim cites evidence ids from the
+# shared evidence store, so numbers travel by reference and are never retyped.
+
+Severity = Literal["low", "medium", "high", "blocking"]
+
+
+class Claim(BaseModel):
+    claim: str = Field(min_length=1, max_length=600)
+    evidence_ids: list[str] = Field(min_length=1)
+
+
+class Counterargument(Claim):
+    rebuttal: str | None = Field(default=None, max_length=600)
+
+
+class Proposal(BaseModel):
+    """DRAFT. Assessment (TAs) -> committee: the 'research paper' for one stock."""
+
+    symbol: str
+    as_of: str
+    thesis: str = Field(min_length=1, max_length=1200)
+    arguments: list[Claim] = Field(min_length=1, max_length=10)
+    counterarguments: list[Counterargument] = Field(min_length=1, max_length=10)
+    feasibility: str = Field(max_length=800)
+    uncertainties: list[str] = Field(default_factory=list, max_length=10)
+    invalidation_conditions: list[str] = Field(min_length=1, max_length=10)
+    expected_holding_period_days: int = Field(gt=0)
+    suggested_position_pct: float = Field(ge=0, le=100)
+    verdict: Literal["submit", "reject", "defer", "needs_evidence"]
+    research_questions: list[str] = Field(default_factory=list, max_length=5)
+
+
+class RiskFinding(BaseModel):
+    issue: str = Field(min_length=1, max_length=600)
+    severity: Severity
+    evidence_ids: list[str] = Field(min_length=1)
+    detail: str = Field(default="", max_length=800)
+
+
+class AssumptionCheck(BaseModel):
+    assumption: str = Field(max_length=400)   # quoted from the proposal
+    holds: bool
+    evidence_ids: list[str] = Field(min_length=1)
+    detail: str = Field(default="", max_length=600)
+
+
+class RiskReport(BaseModel):
+    """DRAFT. Risk & Validation -> committee, produced only when commissioned.
+    Uses the same MCP tools as Research to check the proposal against real data."""
+
+    symbol: str
+    as_of: str
+    answers: list[Claim] = Field(default_factory=list)   # to the committee's questions
+    findings: list[RiskFinding] = Field(default_factory=list, max_length=15)
+    assumption_checks: list[AssumptionCheck] = Field(default_factory=list, max_length=15)
+    liquidity: str = Field(default="", max_length=600)
+    portfolio_impact: str = Field(default="", max_length=800)  # weight, cash after trade, tax
+
+
+# Machine-readable formats for every message in the system (docs/schemas/*.json).
+MESSAGE_FORMATS: dict[str, type[BaseModel]] = {
+    "ResearchRequest": ResearchRequest,
+    "EvidencePacket": EvidencePacket,
+    "Proposal": Proposal,
+    "RiskReport": RiskReport,
+    "Ballot": Ballot,
+    "PortfolioSnapshot": PortfolioSnapshot,
+}

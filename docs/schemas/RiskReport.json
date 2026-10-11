@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "AssumptionCheck": {
+      "properties": {
+        "assumption": {
+          "maxLength": 400,
+          "title": "Assumption",
+          "type": "string"
+        },
+        "holds": {
+          "title": "Holds",
+          "type": "boolean"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "detail": {
+          "default": "",
+          "maxLength": 600,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assumption",
+        "holds",
+        "evidence_ids"
+      ],
+      "title": "AssumptionCheck",
+      "type": "object"
+    },
+    "Claim": {
+      "properties": {
+        "claim": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Claim",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claim",
+        "evidence_ids"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "RiskFinding": {
+      "properties": {
+        "issue": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Issue",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "blocking"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "detail": {
+          "default": "",
+          "maxLength": 800,
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue",
+        "severity",
+        "evidence_ids"
+      ],
+      "title": "RiskFinding",
+      "type": "object"
+    }
+  },
+  "description": "DRAFT. Risk & Validation -> committee, produced only when commissioned.\nUses the same MCP tools as Research to check the proposal against real data.",
+  "properties": {
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "as_of": {
+      "title": "As Of",
+      "type": "string"
+    },
+    "answers": {
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Answers",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/RiskFinding"
+      },
+      "maxItems": 15,
+      "title": "Findings",
+      "type": "array"
+    },
+    "assumption_checks": {
+      "items": {
+        "$ref": "#/$defs/AssumptionCheck"
+      },
+      "maxItems": 15,
+      "title": "Assumption Checks",
+      "type": "array"
+    },
+    "liquidity": {
+      "default": "",
+      "maxLength": 600,
+      "title": "Liquidity",
+      "type": "string"
+    },
+    "portfolio_impact": {
+      "default": "",
+      "maxLength": 800,
+      "title": "Portfolio Impact",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "as_of"
+  ],
+  "title": "RiskReport",
+  "type": "object"
+}

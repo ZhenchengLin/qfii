@@ -1,0 +1,171 @@
+{
+  "$defs": {
+    "EvidenceItem": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Symbol"
+        },
+        "kind": {
+          "enum": [
+            "price",
+            "calc",
+            "filing",
+            "macro",
+            "news"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "as_of": {
+          "title": "As Of",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "symbol",
+        "kind",
+        "source",
+        "as_of",
+        "retrieved_at",
+        "payload"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "Observation": {
+      "description": "One factual statement. Every observation must cite at least one evidence id.",
+      "properties": {
+        "specialty": {
+          "enum": [
+            "fundamental",
+            "technical",
+            "macro_news"
+          ],
+          "title": "Specialty",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "specialty",
+        "text",
+        "evidence_ids"
+      ],
+      "title": "Observation",
+      "type": "object"
+    }
+  },
+  "description": "Research -> Assessment. Facts only; no recommendation.",
+  "properties": {
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "as_of": {
+      "title": "As Of",
+      "type": "string"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/Observation"
+      },
+      "title": "Observations",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "quality_flags": {
+      "items": {
+        "enum": [
+          "stale_data",
+          "short_sample",
+          "missing_values",
+          "synthetic_data",
+          "no_fundamentals",
+          "no_macro",
+          "no_news",
+          "no_benchmark"
+        ],
+        "type": "string"
+      },
+      "title": "Quality Flags",
+      "type": "array"
+    },
+    "gaps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Gaps",
+      "type": "array"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "as_of",
+    "observations",
+    "evidence",
+    "quality_flags",
+    "gaps",
+    "model",
+    "created_at"
+  ],
+  "title": "EvidencePacket",
+  "type": "object"
+}

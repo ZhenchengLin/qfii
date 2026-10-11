@@ -204,6 +204,19 @@ def _cmd_request(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_schemas(cfg: Config, args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .contracts import MESSAGE_FORMATS
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    for name, model in MESSAGE_FORMATS.items():
+        (out / f"{name}.json").write_text(json.dumps(model.model_json_schema(), indent=2) + "\n")
+        print(f"wrote {out / name}.json")
+    return 0
+
+
 def _cmd_setup(cfg: Config, args: argparse.Namespace) -> int:
     from .investor import SetupError, set_profile
 
@@ -334,6 +347,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("status", help="pipeline, queue and budget overview")
 
+    p = sub.add_parser("schemas", help="write JSON schemas of every agent message")
+    p.add_argument("--out", default="docs/schemas")
+
     p = sub.add_parser("setup", help="set the capital to invest and the tax situation")
     p.add_argument("--capital", type=float, required=True, help="dollars the committee may use")
     p.add_argument("--income", type=float, help="annual income, sets the tax bracket")
@@ -355,6 +371,7 @@ def main(argv: list[str] | None = None) -> int:
     handlers = {"init": _cmd_init, "config": _cmd_config, "research": _cmd_research, "debate": _cmd_debate,
                 "data": _cmd_data, "discover": _cmd_discover, "request": _cmd_request,
                 "status": _cmd_status, "setup": _cmd_setup,
+                "schemas": _cmd_schemas,
                 "serve": _cmd_serve, "ask": _cmd_ask}
     try:
         cfg = load_config(args.config)

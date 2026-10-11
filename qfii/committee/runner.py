@@ -1,8 +1,7 @@
 """Run one paper end to end: research -> team reports -> committee debate.
 
-Assessment and Risk & Validation are not built yet (waiting on Ben's report
-formats), so their reports are clearly-labelled placeholders built from the
-research packet.
+Assessment and Risk & Validation are not built yet, so the proposal and any
+Risk report the committee commissions are clearly-labelled placeholders.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from ..agents.research.agent import ResearchAgent
 from ..config import Config
 from ..contracts import EvidencePacket, ResearchRequest
 from ..portfolio import snapshot
-from ..store import save_debate, save_packet, save_reports
+from ..store import save_debate, save_packet, save_proposal
 from .engine import DebateResult, Dossier, run_debate
 from .members import build_members
 from .memory import recall_all
@@ -29,7 +28,7 @@ class PlaceholderTeams:
                 "answering": requests}
 
 
-def placeholder_reports(packet: EvidencePacket) -> tuple[dict[str, Any], dict[str, Any]]:
+def placeholder_proposal(packet: EvidencePacket) -> dict[str, Any]:
     by_id = {e.id: e for e in packet.evidence}
     facts = [{"text": o.text, "specialty": o.specialty,
               "evidence": [{"id": i, **{k: v for k, v in by_id[i].payload.items() if k != "bars"}}
@@ -37,9 +36,7 @@ def placeholder_reports(packet: EvidencePacket) -> tuple[dict[str, Any], dict[st
              for o in packet.observations]
     proposal = {"status": "placeholder: Assessment agent not built",
                 "symbol": packet.symbol, "observations": facts, "gaps": packet.gaps}
-    risk = {"status": "placeholder: Risk & Validation agent not built",
-            "quality_flags": packet.quality_flags}
-    return proposal, risk
+    return proposal
 
 
 @dataclass
@@ -56,8 +53,8 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
     request = ResearchRequest(symbol=symbol, as_of=as_of, requested_by="user")
     research = ResearchAgent(cfg)
     packet, research_calls = await research.run(request)
-    proposal, risk = placeholder_reports(packet)
-    dossier = Dossier(packet.symbol, proposal, risk,
+    proposal = placeholder_proposal(packet)
+    dossier = Dossier(packet.symbol, proposal, None,
                       snapshot(conn, cfg, as_of).model_dump(mode="json"))
     members = build_members(cfg)
     result = await run_debate(dossier, members, PlaceholderTeams(), cfg.committee,
@@ -66,9 +63,8 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
     if save:
         paper_id = save_packet(conn, request, packet, research_calls,
                                cfg.agents["research"].tier)
-        proposal_id, review_id = save_reports(conn, paper_id, proposal, risk,
-                                              actor_suffix=":placeholder")
+        proposal_id = save_proposal(conn, paper_id, proposal, "assessment:placeholder")
         debate_id = save_debate(conn, paper_id, packet.symbol, result,
                                 {m.name: (cfg.agents[m.name].tier, m.calls) for m in members},
-                                proposal_id, review_id)
+                                proposal_id)
     return PaperRun(packet, result, paper_id, debate_id)

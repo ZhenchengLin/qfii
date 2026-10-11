@@ -1,0 +1,53 @@
+{
+  "description": "What the Research agent is asked to look at. `as_of` is the information cutoff:\nno data after it may be used (no look-ahead).",
+  "properties": {
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "as_of": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "As Of"
+    },
+    "question": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Question"
+    },
+    "requested_by": {
+      "default": "user",
+      "enum": [
+        "discovery",
+        "assessment",
+        "risk",
+        "aggressive",
+        "conservative",
+        "neutral",
+        "user"
+      ],
+      "title": "Requested By",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol"
+  ],
+  "title": "ResearchRequest",
+  "type": "object"
+}

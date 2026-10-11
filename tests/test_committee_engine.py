@@ -180,3 +180,16 @@ def test_fake_responder_passes_when_no_room():
                                      "min_cash_pct": 20}}}
     reply = json.loads(fake_member_responder("aggressive")("", json.dumps(view)))
     assert reply["action"] == "pass"
+
+
+async def test_risk_is_not_commissioned_until_the_committee_asks():
+    d = Dossier("AAPL", {"thesis": "t"}, None, dossier().portfolio)
+    members = [Scripted("aggressive", INV, INV), Scripted("conservative", ASK, INV),
+               Scripted("neutral", ASK, INV)]
+    teams = Teams()
+    result = await run_debate(d, members, teams, RULES)
+    first = members[0].views[0].as_prompt_dict()
+    assert first["risk_report"].startswith("not commissioned")
+    assert teams.asked[0][0] == "risk"
+    assert members[0].views[1].info_reports[0]["team"] == "risk"
+    assert result.outcome == "invest"

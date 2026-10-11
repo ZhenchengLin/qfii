@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "Claim": {
+      "properties": {
+        "claim": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Claim",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "claim",
+        "evidence_ids"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "Counterargument": {
+      "properties": {
+        "claim": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Claim",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "rebuttal": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rebuttal"
+        }
+      },
+      "required": [
+        "claim",
+        "evidence_ids"
+      ],
+      "title": "Counterargument",
+      "type": "object"
+    }
+  },
+  "description": "DRAFT. Assessment (TAs) -> committee: the 'research paper' for one stock.",
+  "properties": {
+    "symbol": {
+      "title": "Symbol",
+      "type": "string"
+    },
+    "as_of": {
+      "title": "As Of",
+      "type": "string"
+    },
+    "thesis": {
+      "maxLength": 1200,
+      "minLength": 1,
+      "title": "Thesis",
+      "type": "string"
+    },
+    "arguments": {
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "title": "Arguments",
+      "type": "array"
+    },
+    "counterarguments": {
+      "items": {
+        "$ref": "#/$defs/Counterargument"
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "title": "Counterarguments",
+      "type": "array"
+    },
+    "feasibility": {
+      "maxLength": 800,
+      "title": "Feasibility",
+      "type": "string"
+    },
+    "uncertainties": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Uncertainties",
+      "type": "array"
+    },
+    "invalidation_conditions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "title": "Invalidation Conditions",
+      "type": "array"
+    },
+    "expected_holding_period_days": {
+      "exclusiveMinimum": 0,
+      "title": "Expected Holding Period Days",
+      "type": "integer"
+    },
+    "suggested_position_pct": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Suggested Position Pct",
+      "type": "number"
+    },
+    "verdict": {
+      "enum": [
+        "submit",
+        "reject",
+        "defer",
+        "needs_evidence"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "research_questions": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "title": "Research Questions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "symbol",
+    "as_of",
+    "thesis",
+    "arguments",
+    "counterarguments",
+    "feasibility",
+    "invalidation_conditions",
+    "expected_holding_period_days",
+    "suggested_position_pct",
+    "verdict"
+  ],
+  "title": "Proposal",
+  "type": "object"
+}

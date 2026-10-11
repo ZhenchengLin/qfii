@@ -39,6 +39,32 @@ Committee protocol (Ben, 2026-10-10), implemented in `qfii/committee/`:
 - **The user watches.** `qfii debate SYMBOL` prints every round's arguments and ballots, and the dashboard (M9) will show the same.
 - **Execution is code.** No LLM places orders. Code turns the agreed decision into an order and checks the hard limits last.
 
+## Models and memory (Zhen, 2026-10-10)
+
+| Tier | Model (Ollama tag) | Agents | Approx. size at Q4 |
+|---|---|---|---|
+| max | Qwen3.5 27B (`qwen3.5:27b`) | Neutral | ~17 GB |
+| high | DeepSeek-R1-Distill-Qwen-14B (`deepseek-r1:14b`) | Assessment, Risk, Aggressive, Conservative | ~9 GB |
+| mid | Qwen3.5 9B (`qwen3.5:9b`) | Research | ~6.6 GB |
+
+- **One model in memory at a time** (`runtime.exclusive_models`). Every call goes through `qfii/scheduler.py`.
+  - The loaded model works through *all* queued calls before it is unloaded and the next one loads.
+  - It waits a short settle window so calls about to arrive can join the batch.
+  - `max_batch` keeps any model from starving the others.
+- **The three members don't need three models.** A member's "memory" is just its prompt, so they share a loaded model for free.
+- **Debates run in lockstep across stocks.** Every stock's high-tier ballots for a round are served by one load. The max-tier model stays loaded into the next round when it can. Test: 3 stocks × 3 rounds = 27 calls with 3 model swaps.
+- **This Mac (M1 Pro, 16 GB) cannot run the 27B.** It holds the 9B (5.6 GB measured). `configs/dev-ollama.toml` runs every tier on the 9B for development. `configs/local-ollama.toml` is the team setup for bigger hardware. A ~40 GB+ GPU (e.g. Brev) holds all three models at once, so set `exclusive_models = false` there.
+
+## Ben's rules, 2026-10-10 (second batch)
+
+| Rule | Status |
+|---|---|
+| Messages are schema-checked JSON with numbers passed by reference (`docs/FORMATS.md`) | done |
+| User enters capital; code sets tax rates from income and filing status (`qfii setup`) | done |
+| Risk & Validation runs only when the committee commissions it, with the Research tools | protocol done; agent next |
+| Committee can vote to hold a cash reserve | next |
+| Committee can vote to adjust a held position when new events arrive (EPS miss, Fed rate move) | next, with execution |
+
 ## Cisco track fit
 
 | Level | Qfii |
@@ -57,8 +83,8 @@ Committee protocol (Ben, 2026-10-10), implemented in `qfii/committee/`:
 | M2 | Paper state machine: legal transitions only, event log, DB-level state check | done |
 | M3 | Real data: `qfii data fetch` (Yahoo prices incl. SPY, FRED macro, SEC fundamentals); MCP tools for benchmark, macro (publication-lag aware), fundamentals (filed-by-as_of only) | done |
 | M4 | Continuous discovery: requests first, oldest-first universe scan, dedup, cheap screen (data quality, liquidity), queue cap, daily $ budget; `qfii discover/request/status` | done |
-| M5 | Assessment agent | needs Ben: Proposal spec |
-| M6 | Risk & Validation agent | needs Ben: RiskReport spec |
+| M5 | Assessment agent (draft Proposal format in FORMATS.md) | next, pending Ben's OK on the format |
+| M6 | Risk & Validation agent: on-demand, same MCP tools as Research | next, pending Ben's OK on the format |
 | M7 | Committee with real models; send-back loop with `max_send_backs`; members as A2A servers | after M5–M6 |
 | M8 | Execution: sizing from the agreed size, hard limits, paper broker, ledger, reconciliation | after M7 |
 | M9 | Dashboard: paper detail with the full debate transcript and votes per round; portfolio vs SPY | after M8 |

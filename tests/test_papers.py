@@ -27,19 +27,17 @@ def conn():
 def test_happy_path_to_closed(conn):
     pid = create_paper(conn, "AAPL", "discovery", "research")
     for to, actor in [("packet_ready", "research"), ("proposal", "assessment"),
-                      ("risk_reviewed", "risk"), ("decided", "committee"),
+                      ("decided", "committee"),
                       ("executed", "execution"), ("closed", "execution")]:
         transition(conn, pid, to, actor)
     assert state_of(conn, pid) == "closed"
     assert [h[1] for h in history(conn, pid)] == ["candidate", "packet_ready", "proposal",
-                                                  "risk_reviewed", "decided", "executed",
-                                                  "closed"]
+                                                  "decided", "executed", "closed"]
 
 
 def test_send_back_loop(conn):
     pid = create_paper(conn, "AAPL", "user", "research")
-    for to in ["packet_ready", "proposal", "risk_reviewed", "sent_back", "proposal",
-               "risk_reviewed", "shelved"]:
+    for to in ["packet_ready", "proposal", "sent_back", "proposal", "shelved"]:
         transition(conn, pid, to, "x")
     assert state_of(conn, pid) == "shelved"
 
@@ -47,7 +45,7 @@ def test_send_back_loop(conn):
 @pytest.mark.parametrize("path, bad", [
     ([], "decided"),                              # cannot skip the whole pipeline
     (["packet_ready"], "decided"),                # cannot skip reports and debate
-    (["packet_ready", "proposal"], "decided"),    # cannot skip Risk
+    (["packet_ready", "proposal"], "executed"),   # cannot skip the committee
     (["dropped"], "packet_ready"),                # terminal stays terminal
     ([], "teleported"),                           # unknown state
 ])
@@ -62,7 +60,7 @@ def test_illegal_transitions(conn, path, bad):
 def test_every_target_is_a_known_state():
     assert all(t in STATES for nxt in TRANSITIONS.values() for t in nxt)
     assert TERMINAL == {"dropped", "rejected", "passed", "shelved", "exec_rejected", "closed"}
-    assert "risk_reviewed" in ACTIVE
+    assert "proposal" in ACTIVE and "risk_reviewed" not in STATES
 
 
 def test_db_rejects_unknown_state(conn):

@@ -32,9 +32,9 @@ class Dossier:
     """Everything the committee debates over. Built once per debate."""
 
     symbol: str
-    proposal: dict[str, Any]       # Assessment report
-    risk_report: dict[str, Any]    # Risk & Validation report
-    portfolio: dict[str, Any]      # PortfolioSnapshot as JSON
+    proposal: dict[str, Any]              # Assessment report
+    risk_report: dict[str, Any] | None    # None until the committee commissions Risk
+    portfolio: dict[str, Any]             # PortfolioSnapshot as JSON
 
 
 @dataclass
@@ -53,7 +53,11 @@ class DebateView:
             "you_are": self.member, "round": self.round, "max_rounds": self.max_rounds,
             "final_round": self.round == self.max_rounds, "rules": self.rules,
             "symbol": self.dossier.symbol, "assessment_proposal": self.dossier.proposal,
-            "risk_report": self.dossier.risk_report, "portfolio": self.dossier.portfolio,
+            "risk_report": self.dossier.risk_report or (
+                "not commissioned: Risk & Validation only examines a proposal when the "
+                "committee votes request_info with target risk; its report then appears "
+                "in additional_reports"),
+            "portfolio": self.dossier.portfolio,
             "additional_reports": self.info_reports, "previous_rounds": self.transcript,
             "your_memory": self.memory,
         }

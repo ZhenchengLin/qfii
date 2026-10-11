@@ -60,25 +60,18 @@ def save_packet(conn: sqlite3.Connection, request: ResearchRequest, packet: Evid
     return paper_id
 
 
-def save_reports(conn: sqlite3.Connection, paper_id: int, proposal: dict[str, Any],
-                 risk_report: dict[str, Any], actor_suffix: str = "") -> tuple[int, int]:
-    """Store the Assessment proposal and Risk report; packet_ready/sent_back -> risk_reviewed."""
-    now = utcnow()
+def save_proposal(conn: sqlite3.Connection, paper_id: int, proposal: dict[str, Any],
+                  actor: str = "assessment") -> int:
+    """Store an Assessment proposal: packet_ready / sent_back -> proposal."""
     with conn:
         version = conn.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM proposals "
                                "WHERE paper_id = ?", (paper_id,)).fetchone()[0]
         proposal_id = conn.execute(
             "INSERT INTO proposals (paper_id, version, verdict, body_json, created_at) "
-            "VALUES (?, ?, 'submit', ?, ?)", (paper_id, version, json.dumps(proposal), now),
+            "VALUES (?, ?, 'submit', ?, ?)", (paper_id, version, json.dumps(proposal), utcnow()),
         ).lastrowid
-        transition(conn, paper_id, "proposal", "assessment" + actor_suffix, f"v{version}")
-        review_id = conn.execute(
-            "INSERT INTO reviews (paper_id, proposal_id, reviewer, outcome, body_json, "
-            "created_at) VALUES (?, ?, 'risk', 'reported', ?, ?)",
-            (paper_id, proposal_id, json.dumps(risk_report), now),
-        ).lastrowid
-        transition(conn, paper_id, "risk_reviewed", "risk" + actor_suffix)
-    return proposal_id, review_id
+        transition(conn, paper_id, "proposal", actor, f"v{version}")
+    return proposal_id
 
 
 # paper state after a committee debate
@@ -88,7 +81,7 @@ DEBATE_STATE = {"invest": "decided", "replace": "decided", "pass": "passed",
 
 def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
                 member_calls: dict[str, tuple[str, list[dict[str, Any]]]] | None = None,
-                proposal_id: int | None = None, review_id: int | None = None) -> int:
+                proposal_id: int | None = None) -> int:
     """Store a finished committee debate (qfii.committee.engine.DebateResult).
     member_calls maps member -> (model tier, LLM call records)."""
     from .committee.memory import remember
@@ -98,7 +91,7 @@ def save_debate(conn: sqlite3.Connection, paper_id: int, symbol: str, result,
         debate_id = conn.execute(
             "INSERT INTO debates (paper_id, proposal_id, risk_report_id, outcome, rounds_used, "
             "started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (paper_id, proposal_id, review_id, result.outcome, len(result.rounds), now, now),
+            (paper_id, proposal_id, None, result.outcome, len(result.rounds), now, now),
         ).lastrowid
         for rec in result.rounds:
             for b in rec.ballots:

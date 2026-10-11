@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "Holding": {
+      "properties": {
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "number"
+        },
+        "avg_cost": {
+          "title": "Avg Cost",
+          "type": "number"
+        },
+        "last_price": {
+          "title": "Last Price",
+          "type": "number"
+        },
+        "market_value_usd": {
+          "title": "Market Value Usd",
+          "type": "number"
+        },
+        "weight_pct": {
+          "title": "Weight Pct",
+          "type": "number"
+        },
+        "unrealized_pnl_usd": {
+          "title": "Unrealized Pnl Usd",
+          "type": "number"
+        },
+        "oldest_lot_days": {
+          "title": "Oldest Lot Days",
+          "type": "integer"
+        },
+        "short_term_qty": {
+          "title": "Short Term Qty",
+          "type": "number"
+        },
+        "long_term_qty": {
+          "title": "Long Term Qty",
+          "type": "number"
+        },
+        "est_tax_if_sold_usd": {
+          "title": "Est Tax If Sold Usd",
+          "type": "number"
+        },
+        "avg_daily_volume_usd": {
+          "title": "Avg Daily Volume Usd",
+          "type": "number"
+        },
+        "pct_of_daily_volume": {
+          "title": "Pct Of Daily Volume",
+          "type": "number"
+        }
+      },
+      "required": [
+        "symbol",
+        "qty",
+        "avg_cost",
+        "last_price",
+        "market_value_usd",
+        "weight_pct",
+        "unrealized_pnl_usd",
+        "oldest_lot_days",
+        "short_term_qty",
+        "long_term_qty",
+        "est_tax_if_sold_usd",
+        "avg_daily_volume_usd",
+        "pct_of_daily_volume"
+      ],
+      "title": "Holding",
+      "type": "object"
+    }
+  },
+  "description": "Shared by Assessment, Risk and all three committee members (not Research).",
+  "properties": {
+    "as_of": {
+      "title": "As Of",
+      "type": "string"
+    },
+    "cash_usd": {
+      "title": "Cash Usd",
+      "type": "number"
+    },
+    "equity_usd": {
+      "title": "Equity Usd",
+      "type": "number"
+    },
+    "cash_pct": {
+      "title": "Cash Pct",
+      "type": "number"
+    },
+    "holdings": {
+      "items": {
+        "$ref": "#/$defs/Holding"
+      },
+      "title": "Holdings",
+      "type": "array"
+    },
+    "benchmark": {
+      "title": "Benchmark",
+      "type": "string"
+    },
+    "limits": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "costs_bps": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Costs Bps",
+      "type": "object"
+    },
+    "tax": {
+      "additionalProperties": true,
+      "title": "Tax",
+      "type": "object"
+    },
+    "investor": {
+      "additionalProperties": true,
+      "title": "Investor",
+      "type": "object"
+    }
+  },
+  "required": [
+    "as_of",
+    "cash_usd",
+    "equity_usd",
+    "cash_pct",
+    "holdings",
+    "benchmark",
+    "limits",
+    "costs_bps",
+    "tax",
+    "investor"
+  ],
+  "title": "PortfolioSnapshot",
+  "type": "object"
+}

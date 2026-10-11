@@ -3,14 +3,13 @@
 Every state change goes through transition(), which allows only the moves in
 TRANSITIONS and writes an event row, so the event log is the paper's history.
 
-    candidate ──research──▶ packet_ready ──assessment──▶ proposal ──risk──▶ risk_reviewed
-        │                       │  ▲                                          │
-        ▼                       ▼  │ research                     committee debate
-     dropped        rejected / deferred / needs_evidence          │
-                                                                  ▼
-             decided ──execution──▶ executed ──sold──▶ closed    passed / shelved
-                │                                                 sent_back ──▶ proposal
-                └──▶ exec_rejected (hard limits)                  (revision) or risk_reviewed
+    candidate ──research──▶ packet_ready ──assessment──▶ proposal ──committee debate──┐
+        │                       │  ▲                     ▲   (Risk & Validation runs   │
+        ▼                       ▼  │ research            │    only if the committee   │
+     dropped        rejected / deferred / needs_evidence │    votes to commission it) │
+                                                         └──── sent_back ◀────────────┤
+             decided ──execution──▶ executed ──sold──▶ closed     passed / shelved ◀──┘
+                └──▶ exec_rejected (hard limits)
 """
 
 from __future__ import annotations
@@ -24,9 +23,8 @@ TRANSITIONS: dict[str, set[str]] = {
     "packet_ready": {"proposal", "rejected", "deferred", "needs_evidence"},
     "needs_evidence": {"packet_ready", "dropped"},
     "deferred": {"packet_ready", "dropped"},
-    "proposal": {"risk_reviewed"},
-    "risk_reviewed": {"decided", "passed", "sent_back", "shelved"},
-    "sent_back": {"proposal", "risk_reviewed", "shelved"},
+    "proposal": {"decided", "passed", "sent_back", "shelved"},
+    "sent_back": {"proposal", "shelved"},
     "decided": {"executed", "exec_rejected"},
     "executed": {"closed"},
     # terminal
