@@ -148,6 +148,39 @@ fundamentals only count filings filed by `as_of`. The default `synthetic`
 source is a deterministic random walk for offline development and is flagged
 `synthetic_data` in every packet.
 
+### The bottom-up week (hackathon demo)
+
+Instead of a user typing a ticker, ten Nasdaq-100 stocks drawn at random (fixed
+seed) are followed through Oct 5-9, 2026, every 10 minutes of market time:
+
+```bash
+.venv/bin/qfii --config configs/week.toml week build   # dataset: data/week (offline)
+.venv/bin/qfii --config configs/week.toml week check
+.venv/bin/qfii --config configs/week.toml week run     # or press Start on the website
+.venv/bin/qfii --config configs/week.toml week run --resume
+```
+
+- **Data** (`week build`): raw Yahoo 1-minute and daily bars are saved, then
+  turned into exactly what the tools read: daily and 10-minute price CSVs, FRED
+  macro, and every SEC filing the week can see, parsed and cached with its SEC
+  acceptance time. 4.7 MB in all (limit: 1 GB per market day). The draw keeps
+  companies the tools can serve: a year of prices, a full trading week, US
+  10-K/10-Q filers. Seed 20261005 drew ALAB, EXC, CSCO, NXPI, SNPS, MELI, FTNT,
+  SHOP, TXN and LITE.
+- **Cutoffs to the minute**: `as_of` can be `2026-10-07T11:20` (US Eastern).
+  Today's price is the last 10-minute bar closed by then; a filing counts from
+  the minute the SEC accepted it (taken from the filing index page; the bulk
+  API time EdgarTools reports is 4 hours late).
+- **Research** rewrites a report only on new information: a filing, a price
+  move of 2% since its last report, or a question from Assessment (also searched
+  in the filings).
+- **Assessment** reads all ten reports at each open and whenever one changed:
+  advance, hold, dig deeper (Research rewrites with its questions) or reject,
+  computing missing figures itself with the `calculate` tool.
+- **Committee**: an advanced stock gets Assessment's proposal and a debate, at
+  most once a day unless something new is filed. Assessment sits as the neutral
+  member (`committee.neutral_is_assessment`); members ask Research or Risk.
+
 ### Measure the committee
 
 ```bash
