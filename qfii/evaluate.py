@@ -191,6 +191,18 @@ def markdown_report(rows: list[dict[str, Any]], summary: dict[str, Any]) -> str:
             tail.append(f"| {name} | {w['concluded']} | {w['avg_rounds_to_conclusion']} "
                         f"| {w['avg_rounds_all_debated']} | {w['rounds_saved']} "
                         f"| {w['outcomes']} | {w['inexact']} |")
+        names = list(s["what_if"])
+        tail += ["", "Per stock (outcome / rounds; * = inexact):", "",
+                 "| symbol | as run | " + " | ".join(names) + " |",
+                 "|---|---|" + "---|" * len(names)]
+        for r in rows:
+            w = r.get("what_if") or {}
+            if not w:
+                continue
+            cells = [f"{w[n]['outcome']} / {w[n]['rounds']}{'' if w[n]['exact'] else '*'}"
+                     for n in names]
+            tail.append(f"| {r['symbol']} | {r['outcome']} / {r['rounds_total']} | "
+                        + " | ".join(cells) + " |")
     holdouts = [r for r in rows if r.get("outcome") == "no_consensus" and r.get("final_votes")]
     if holdouts:
         tail += ["", "## No consensus: final positions", ""]

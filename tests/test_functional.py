@@ -212,6 +212,8 @@ async def test_eval_reports_what_if_and_replays_from_the_database(cfg, conn, mon
     assert w["stop_after_3_unchanged"]["avg_rounds_all_debated"] == 5
     report = (Path(result["dir"]) / "report.md").read_text()
     assert "## What if" in report and "NVDA: {'invest': 1, 'pass': 2}" in report
+    assert "| NVDA | no_consensus / 8 | pass / 2 | no_consensus / 5 | pass / 4 | pass / 5 |" \
+        in report
 
     # the same numbers straight from the saved ballots
     pid = conn.execute("SELECT MAX(paper_id) FROM debates").fetchone()[0]
