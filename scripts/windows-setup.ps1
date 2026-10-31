@@ -21,13 +21,15 @@ function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cya
 # In Windows PowerShell 5 a native program's stderr becomes a terminating error
 # under "Stop" once redirected, so programs always run under "Continue" here and
 # are judged by their exit code.
+# These two take no named parameters on purpose: PowerShell would otherwise read a
+# program's flags as its own (pip's -e matched a parameter named -Exe).
 function Probe {
     # Run a command only to look at it. Returns its stdout, or $null if it is
     # missing or fails (e.g. the Microsoft Store's fake python.exe).
-    param([string]$Exe, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
     $ErrorActionPreference = "Continue"
+    $exe, $rest = $args
     try {
-        $out = & $Exe @Rest 2>$null
+        $out = & $exe @rest 2>$null
         if ($LASTEXITCODE -eq 0) { return $out }
     } catch { }
     return $null
@@ -35,10 +37,11 @@ function Probe {
 
 function Run {
     # Run a command that must succeed, showing its output.
-    param([string]$Exe, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
     $ErrorActionPreference = "Continue"
-    & $Exe @Rest
-    if ($LASTEXITCODE -ne 0) { throw "failed: $Exe $($Rest -join ' ')" }
+    $exe, $rest = $args
+    $global:LASTEXITCODE = 0
+    & $exe @rest
+    if (-not $? -or $LASTEXITCODE -ne 0) { throw "failed: $exe $($rest -join ' ')" }
 }
 
 function Refresh-Path {
@@ -87,6 +90,7 @@ function Write-Utf8NoBom($path, $text) {
 
 # ---------------------------------------------------------------- tools
 Step "Checking Git, Python 3.11+ and Ollama"
+Refresh-Path   # finds what was installed since this window opened
 Need git "Git.Git" "Git"
 $python = Find-Python
 if (-not $python) {
@@ -127,16 +131,32 @@ if (-not (Test-Path ".venv\Scripts\python.exe")) { Run $python -m venv .venv }
 $vpy = Join-Path $repo ".venv\Scripts\python.exe"
 Run $vpy -m pip install -q --upgrade pip
 Run $vpy -m pip install -q -e ".[sec]"
+Run $vpy -c "import uvicorn, mcp, langgraph, a2a, edgar; print('Packages OK')"
 $env:PYTHONUTF8 = "1"   # prompts and data files are UTF-8
 
 # ---------------------------------------------------------------- this PC
 Step "Reading this PC's specs"
 $ramGB = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
+# Every adapter, not just the first: over Remote Desktop the first one is often the
+# virtual "Microsoft Remote Display Adapter". The registry has the real memory size,
+# which Win32_VideoController caps at 4 GB. Ollama can use NVIDIA and AMD cards.
 $gpu = ""
 $vramGB = 0
+$adapters = @()
+$classKey = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*"
+foreach ($item in (Get-ItemProperty $classKey -ErrorAction SilentlyContinue)) {
+    if (-not $item.DriverDesc) { continue }
+    $bytes = 0
+    try { $bytes = [int64]$item.'HardwareInformation.qwMemorySize' } catch { }
+    $adapters += [pscustomobject]@{ Name = $item.DriverDesc; GB = [math]::Floor($bytes / 1GB) }
+}
+foreach ($a in $adapters) {
+    Write-Host "Adapter: $($a.Name)$(if ($a.GB) { ", $($a.GB) GB" })"
+    if ($a.Name -match "NVIDIA|AMD|Radeon" -and $a.GB -gt $vramGB) { $gpu = $a.Name; $vramGB = $a.GB }
+}
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-    $line = Probe nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits |
+    $line = Probe nvidia-smi "--query-gpu=name,memory.total" "--format=csv,noheader,nounits" |
             Select-Object -First 1
     if ($line) {
         $parts = $line -split ","
@@ -144,10 +164,7 @@ if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
         $vramGB = [math]::Floor([double]$parts[1].Trim() / 1024)
     }
 }
-if (-not $gpu) {
-    $gpu = (Get-CimInstance Win32_VideoController | Select-Object -First 1).Name
-    $gpu = "$gpu (no NVIDIA GPU detected: models run on the CPU)"
-}
+if (-not $gpu) { $gpu = "no NVIDIA or AMD GPU detected: models run on the CPU" }
 Write-Host "CPU:  $cpu"
 Write-Host "RAM:  $ramGB GB"
 Write-Host "GPU:  $gpu$(if ($vramGB) { ", $vramGB GB VRAM" })"
