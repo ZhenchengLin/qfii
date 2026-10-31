@@ -12,12 +12,17 @@ if (Test-Path ".env.local") {
     }
 }
 
-# Ollama normally runs from the tray; start it if it is not answering
-$ErrorActionPreference = "Continue"   # a native program's stderr must not be fatal
-try { & ollama list 2>$null | Out-Null; $up = ($LASTEXITCODE -eq 0) } catch { $up = $false }
-$ErrorActionPreference = "Stop"
-if (-not $up) {
-    Start-Process ollama -ArgumentList "serve" -WindowStyle Hidden
+# Ollama normally runs from the tray: ask its API, so this works in a window opened
+# before Ollama was installed, and start it only if nothing answers
+$env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+            [Environment]::GetEnvironmentVariable("Path", "User")
+try {
+    Invoke-WebRequest "http://127.0.0.1:11434/api/tags" -UseBasicParsing -TimeoutSec 3 | Out-Null
+} catch {
+    $ollama = (Get-Command ollama -ErrorAction SilentlyContinue).Source
+    if (-not $ollama) { $ollama = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe" }
+    if (-not (Test-Path $ollama)) { throw "Ollama not found: run scripts\windows-setup.ps1 first" }
+    Start-Process $ollama -ArgumentList "serve" -WindowStyle Hidden
     Start-Sleep -Seconds 5
 }
 
