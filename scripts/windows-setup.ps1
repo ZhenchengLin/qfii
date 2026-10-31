@@ -110,6 +110,13 @@ $repo = Join-Path $docs "qfii"
 Step "Getting the code into $repo"
 if (Test-Path (Join-Path $repo ".git")) {
     Run git -C $repo pull --ff-only
+} elseif (Test-Path $repo) {
+    # the folder exists without the code (an interrupted setup, or .env.local saved
+    # first): git clone refuses a non-empty folder, so fetch into it and keep its files
+    Run git -C $repo init -q
+    Run git -C $repo remote add origin https://github.com/ZhenchengLin/qfii.git
+    Run git -C $repo fetch -q origin main
+    Run git -C $repo checkout -q -f -B main origin/main
 } else {
     Run git clone https://github.com/ZhenchengLin/qfii.git $repo
 }
