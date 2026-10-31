@@ -130,6 +130,7 @@ class Config:
     execution_mode: str
     week: Week
     ui_mode: str = "ticker"
+    online_research: bool = False
 
     def model_for(self, agent: str) -> ModelSpec:
         return self.models[self.agents[agent].tier]
@@ -277,6 +278,8 @@ def _build(raw: dict[str, Any]) -> Config:
     if mode not in EXECUTION_MODES:
         raise ConfigError(f"execution.mode must be one of {EXECUTION_MODES}, got {mode!r}")
 
+    if not isinstance(raw["data"]["online_research"], bool):
+        raise ConfigError("data.online_research must be true or false")
     if raw["ui"]["mode"] not in UI_MODES:
         raise ConfigError(f"ui.mode must be one of {UI_MODES}, got {raw['ui']['mode']!r}")
 
@@ -328,6 +331,7 @@ def _build(raw: dict[str, Any]) -> Config:
         execution_mode=mode,
         week=_week(raw["week"]),
         ui_mode=raw["ui"]["mode"],
+        online_research=raw["data"]["online_research"],
     )
 
 

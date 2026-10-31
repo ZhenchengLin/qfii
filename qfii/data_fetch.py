@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -148,6 +149,24 @@ def _last_date(path: Path) -> date | None:
     with path.open() as fh:
         lines = [ln for ln in fh.read().splitlines() if ln.strip()]
     return date.fromisoformat(lines[-1].split(",")[0]) if len(lines) > 1 else None
+
+
+def ensure_macro(macro_dir: Path, series_ids: list[str],
+                 http: httpx.Client | None = None) -> None:
+    """Download macro series that are missing or over a day old. A failed download
+    leaves any older file in place; a series with no file shows up as a data gap."""
+    client = http
+    for sid in series_ids:
+        path = macro_dir / f"{sid}.csv"
+        key = ("macro", sid, date.today().isoformat())
+        if key in _TRIED or (path.exists() and time.time() - path.stat().st_mtime < 86400):
+            continue
+        _TRIED.add(key)
+        client = client or httpx.Client(timeout=30, follow_redirects=True)
+        try:
+            write_series(macro_dir, sid, fetch_fred_series(client, sid))
+        except (FetchError, ValueError):
+            pass
 
 
 def ensure_prices(csv_dir: Path, symbol: str, as_of: date,

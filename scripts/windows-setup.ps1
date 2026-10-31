@@ -1,5 +1,6 @@
-# Qfii on a Windows PC: install, pick local models (Ollama) that fit this PC,
-# fetch data, and add a "Qfii" shortcut that opens the debate page.
+# Qfii on a Windows PC: install, pick local models (Ollama) that fit this PC, and
+# add a "Qfii" shortcut that opens the debate page. No data download is needed:
+# the research teams fetch prices, macro, news and filings online when they run.
 #
 # Run in PowerShell (no admin needed):
 #   irm https://raw.githubusercontent.com/ZhenchengLin/qfii/main/scripts/windows-setup.ps1 -OutFile $env:TEMP\qfii-setup.ps1
@@ -7,13 +8,11 @@
 #
 # Options:
 #   -Plan cpu|gpu8|gpu12|gpu24|gpu48   force a model plan instead of detecting one
-#   -SkipData                          do not download prices / macro / SEC data now
 # Re-running is safe: it pulls the latest code and keeps your data and .env.local.
 
 param(
     [ValidateSet("", "cpu", "gpu8", "gpu12", "gpu24", "gpu48")]
-    [string]$Plan = "",
-    [switch]$SkipData
+    [string]$Plan = ""
 )
 $ErrorActionPreference = "Stop"
 
@@ -211,6 +210,7 @@ $config = @"
 
 [data]
 source = "csv"
+online_research = true   # the research teams fetch prices, macro and news themselves
 sec_user_agent = "env:SEC_USER_AGENT"   # set in .env.local; empty = no SEC data
 
 [models.mid]
@@ -238,8 +238,9 @@ Write-Host "Wrote config.local.toml"
 # ---------------------------------------------------------------- SEC contact
 if (-not (Test-Path ".env.local")) {
     Step "SEC contact (optional)"
-    Write-Host "SEC filings (fundamentals, 8-K news) need a contact the SEC can reach,"
-    Write-Host "for example:  Qfii yourname@example.com   (leave empty to skip SEC data)"
+    Write-Host "The SEC requires anyone downloading filings to name a contact. Without it,"
+    Write-Host "Research has no revenue, earnings or filing data (prices and news still work)."
+    Write-Host "Example:  Qfii yourname@example.com   (leave empty to skip)"
     $sec = Read-Host "SEC contact"
     if ($sec) {
         Write-Utf8NoBom (Join-Path $repo ".env.local") "SEC_USER_AGENT=`"$sec`"`n"
@@ -268,13 +269,7 @@ foreach ($m in ($models | Select-Object -Unique)) {
     Run ollama pull $m
 }
 
-# ---------------------------------------------------------------- data + check
-if (-not $SkipData) {
-    Step "Downloading prices (incl. SPY), FRED macro and SEC data"
-    # a failed download should not stop the setup: tools fetch what they can later
-    try { Run $vpy -m qfii.cli --config config.local.toml data fetch }
-    catch { Write-Host "Data download had a problem: $_" -ForegroundColor Yellow }
-}
+# ---------------------------------------------------------------- check
 Step "Checking the configuration"
 Run $vpy -m qfii.cli --config config.local.toml config
 

@@ -85,6 +85,7 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str,
     fund = (sec_fund if sec_fund.get("available")
             else await tools.call("get_fundamentals", symbol=sym, as_of=as_of))
     news = await tools.call("get_sec_news", symbol=sym, as_of=as_of)
+    web = await tools.call("get_web_news", symbol=sym, as_of=as_of)
     hits: dict[str, dict] = {}
     for q in queries:
         res = await tools.call("search_sec_filings", symbol=sym, as_of=as_of, query=q,
@@ -189,8 +190,17 @@ async def collect_evidence(tools: ToolBox, sym: str, as_of: str,
              "headline": n["headline"], "text": n["text"][:3000], "url": n["url"],
              "label": f"8-K filed {n['filed']}: {events}"})
     if not news.get("available"):
-        flags.append("no_news")
-        gaps.append(f"news unavailable: {news.get('reason', 'not configured')}")
+        if not web.get("available"):
+            flags.append("no_news")
+        gaps.append(f"8-K news unavailable: {news.get('reason', 'not configured')}")
+
+    # news from the web: third-party reports, labelled as such
+    for n in web.get("news", []):
+        add("news", f"mcp:get_web_news/{n['publisher']}", "macro_news", "web_news", n["title"],
+            {"name": "web_news", "headline": n["title"], "summary": n["summary"],
+             "publisher": n["publisher"], "published": n["published"], "url": n["url"],
+             "label": f"news report, unverified: {n['publisher']}, {n['published']}"},
+            summary=n["summary"])
 
     # filing passages relevant to the queries (risk factors, MD&A, press releases)
     for h in hits.values():

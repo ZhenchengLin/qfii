@@ -12,6 +12,7 @@
 
 [data]
 source = "csv"
+online_research = true
 
 [models.mid]
 provider = "ollama"

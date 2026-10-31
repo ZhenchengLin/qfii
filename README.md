@@ -62,6 +62,14 @@ powershell -ExecutionPolicy Bypass -File $env:TEMP\qfii-setup.ps1
 Then start the page with the `Qfii` desktop shortcut. `ui.mode` chooses the page:
 `ticker` (default, type a stock) or `week` (`configs/week.toml`, the week replay).
 
+### Online research
+
+With `online_research = true` under `[data]` (on in the Windows setup and
+`configs/mac-local.toml`), the teams need no prepared data: prices and macro series
+download when first needed, and `get_web_news` adds headlines from Yahoo Finance RSS and
+GDELT, published by `as_of` and naming the company. Headlines are cited as unverified
+third-party reports. SEC filings still need the contact below, which the SEC requires.
+
 ### SEC fundamentals, 8-K news and filing search
 
 `pip install -e '.[sec]'` (EdgarTools; add `docling` for better press-release and

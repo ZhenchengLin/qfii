@@ -14,6 +14,9 @@ from .macro import macro_snapshot
 from .market import DataError, load_prices
 from .quality import quality_flags
 
+# Shared by every agent's tool session, so Research and Risk ask only once per cutoff.
+_NEWS_CACHE: dict = {}
+
 
 def _sec(cfg: Config, cache: dict):
     """One SecSource per tool server; None (with the reason) if not configured."""
@@ -103,6 +106,10 @@ def build_tool_server(cfg: Config) -> MCPServer:
     def get_macro_snapshot(as_of: str) -> dict:
         """Latest public value (respecting publication lag) and the values 3 and 12 months
         earlier for rates, inflation, unemployment, credit spreads and volatility."""
+        if cfg.online_research:
+            from ..data_fetch import ensure_macro
+
+            ensure_macro(cfg.macro_dir, list(cfg.macro_series))
         return {"as_of": as_of, "source": "FRED",
                 "series": macro_snapshot(cfg.macro_dir, list(cfg.macro_series),
                                          _cut(as_of).day)}
@@ -161,6 +168,24 @@ def build_tool_server(cfg: Config) -> MCPServer:
         for n in news:
             n["text"] = n["text"][:3000]
         return {"symbol": symbol.upper(), "as_of": as_of, "available": True, "news": news}
+
+    @server.tool()
+    def get_web_news(symbol: str, as_of: str, limit: int = 12) -> dict:
+        """Recent news headlines about a company from the web, published by as_of. These
+        are third-party reports, not verified facts: attribute them to their publisher."""
+        if not cfg.online_research:
+            return {"symbol": symbol.upper(), "available": False, "news": [],
+                    "reason": "online research is off (data.online_research)"}
+        cut = _cut(as_of)
+        key = (symbol.upper(), cut.iso(), limit)
+        if key not in _NEWS_CACHE:
+            from .webnews import web_news
+
+            result = web_news(symbol, cut, limit)
+            if not result["available"]:
+                return result
+            _NEWS_CACHE[key] = result
+        return _NEWS_CACHE[key]
 
     @server.tool()
     def search_sec_filings(symbol: str, as_of: str, query: str, k: int = 4) -> dict:
