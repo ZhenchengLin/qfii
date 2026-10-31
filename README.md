@@ -50,6 +50,18 @@ Assessment proposal, every member's ballot and argument as it is cast, team
 reports (Risk findings by severity, checked assumptions), and the outcome.
 Past debates are listed on the left.
 
+### On a Windows PC (local models)
+
+In PowerShell; installs into `Documents\qfii` and picks Ollama models that fit the PC:
+
+```powershell
+irm https://raw.githubusercontent.com/ZhenchengLin/qfii/main/scripts/windows-setup.ps1 -OutFile $env:TEMP\qfii-setup.ps1
+powershell -ExecutionPolicy Bypass -File $env:TEMP\qfii-setup.ps1
+```
+
+Then start the page with the `Qfii` desktop shortcut. `ui.mode` chooses the page:
+`ticker` (default, type a stock) or `week` (`configs/week.toml`, the week replay).
+
 ### SEC fundamentals, 8-K news and filing search
 
 `pip install -e '.[sec]'` (EdgarTools; add `docling` for better press-release and

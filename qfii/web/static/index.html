@@ -163,15 +163,41 @@ details.proposal { background: var(--panel); border: 1px solid var(--line); bord
 </header>
 <div class="layout">
   <aside>
-    <h2>Week replay</h2>
-    <div class="weekbox" id="weekbox"><div class="empty">Loading…</div></div>
-    <h2>Stocks</h2>
-    <div class="list" id="stocks"></div>
+    <div id="tickerSide" hidden>
+      <h2>New debate</h2>
+      <form id="form">
+        <label for="symbol">Ticker</label>
+        <input id="symbol" placeholder="NVDA" autocomplete="off" required>
+        <label for="asof">Information cutoff (optional)</label>
+        <input id="asof" type="date">
+        <button id="go" type="submit">Start debate</button>
+        <div id="formMsg"></div>
+      </form>
+    </div>
+    <div id="weekSide" hidden>
+      <h2>Week replay</h2>
+      <div class="weekbox" id="weekbox"><div class="empty">Loading…</div></div>
+      <h2>Stocks</h2>
+      <div class="list" id="stocks"></div>
+    </div>
     <h2 style="margin-top:22px">Debates</h2>
     <div class="list" id="history"><div class="empty">None yet.</div></div>
   </aside>
   <main id="main">
-    <div class="intro">
+    <div class="intro" id="introTicker" hidden>
+      <h3>Watch three investors argue</h3>
+      <p>Research gathers cited facts about a stock and Assessment writes a proposal. Then the
+        committee debates in rounds:
+        <b style="color:var(--aggressive)">Aggressive</b> weighs upside,
+        <b style="color:var(--conservative)">Conservative</b> weighs downside, and
+        <b style="color:var(--neutral)">Neutral</b> weighs both against the S&amp;P 500 and the
+        whole portfolio. Each has one equal vote. They can invest, pass, ask a team for more
+        information, send the proposal back, or propose amended terms. A trade needs consensus
+        on the action and the size; if they cannot agree within the round limit, the stock is
+        shelved.</p>
+      <p>Type a ticker on the left to start a debate, or open a past one.</p>
+    </div>
+    <div class="intro" id="introWeek" hidden>
       <h3>A trading week, bottom up</h3>
       <p>Ten Nasdaq-100 stocks drawn at random are followed through one week of market time,
         every 10 minutes. <b>Research</b> rewrites a stock's report when something new happens
@@ -455,6 +481,7 @@ function watch(runId, symbol, asOf) {
         if (!r.querySelector(".action")) r.remove();
       });
       renderOutcome(ev); setPill(ev.type === "error" ? "failed" : "finished", false);
+      if ($("#go")) $("#go").disabled = false;
       loadHistory(ev.debate_id); loadStatus();
     }
   };
@@ -465,9 +492,12 @@ async function showDebate(id) {
   if (source) { source.close(); source = null; }
   const d = await (await fetch(`api/debates/${id}`)).json();
   header(d.symbol, d.research.as_of, "finished", false);
-  const back = el("button", "secondary", "← Back to the week");
+  const back = el("button", "secondary", tickerMode ? "← New debate" : "← Back to the week");
   back.style.cssText = "margin-bottom:12px;background:var(--chip);color:var(--ink)";
-  back.onclick = () => { $("#main").replaceChildren(); showWeek(); };
+  back.onclick = () => {
+    $("#main").replaceChildren();
+    if (tickerMode) { $("#main").append(tickerIntro); $("#symbol").focus(); } else showWeek();
+  };
   $("#main").prepend(back);
   renderResearch(d.research);
   if (d.proposal && d.proposal.thesis) renderProposal(d.proposal, 1);
@@ -654,9 +684,36 @@ function showWeek() {
   loadWeek();
 }
 
+$("#form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#formMsg").textContent = "";
+  const symbol = $("#symbol").value.trim().toUpperCase();
+  const as_of = $("#asof").value || null;
+  $("#go").disabled = true;
+  const res = await fetch("api/runs", {method: "POST", headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify({symbol, as_of})});
+  const body = await res.json();
+  if (!res.ok) { $("#formMsg").textContent = body.error; $("#go").disabled = false; return; }
+  watch(body.run_id, body.symbol, body.as_of);
+};
+
+let tickerMode = true;
+let tickerIntro = null;
+
 (async () => {
   const s = await loadStatus();
+  tickerMode = s.ui_mode !== "week";
   if (s.committee && s.committee.neutral_is_assessment) models.neutral = (models.neutral || "") + " · Assessment";
+  if (tickerMode) {
+    $("#tickerSide").hidden = false;
+    tickerIntro = $("#introTicker"); tickerIntro.hidden = false;
+    $("#introWeek").remove(); $("#timeline").remove();
+    await loadHistory();
+    if (s.active_run) { $("#go").disabled = true; watch(s.active_run, "…", ""); }
+    else $("#symbol").focus();
+    return;
+  }
+  $("#weekSide").hidden = false; $("#introWeek").hidden = false; $("#introTicker").remove();
   await loadHistory();
   const w = await loadWeek();
   if (s.active_run) watch(s.active_run, "…", "");

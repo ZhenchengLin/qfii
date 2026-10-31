@@ -7,7 +7,7 @@
   GET  /api/week                the week replay: run status, the stocks, latest events
   POST /api/week/start          {"resume": true|false} starts `qfii week run` in the background
   POST /api/week/stop           stops the replay after the current slot
-  POST /api/runs                (development only; the page no longer offers ticker input)
+  POST /api/runs                {"symbol": "NVDA", "as_of": "2026-10-09"} starts a debate (ui.mode "ticker")
   GET  /api/runs/{id}/events    Server-Sent Events: research, ballot, round, outcome, error
 
 One debate runs at a time (they share the models). Events are kept per run, so a
@@ -53,6 +53,25 @@ class Run:
         self.changed.set()
 
 
+def _process_alive(pid: int) -> bool:
+    """os.kill(pid, 0) checks a process on POSIX, but on Windows it terminates it."""
+    import os
+
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel32.CloseHandle(handle)
+        return bool(ok) and code.value == 259                 # STILL_ACTIVE
+    os.kill(pid, 0)
+    return True
+
+
 def _ballot_json(b: Any) -> dict[str, Any]:
     return b.model_dump(exclude_none=True, exclude={"note_to_self"})
 
@@ -84,6 +103,7 @@ class DebateServer:
                           "pass_rule": cfg.committee.pass_rule,
                           "procedural_rule": cfg.committee.procedural_rule,
                           "neutral_is_assessment": cfg.committee.neutral_is_assessment},
+            "ui_mode": cfg.ui_mode,
             "active_run": self.active.id if self.active and not self.active.done else None,
         }
 
@@ -173,12 +193,9 @@ class DebateServer:
         return Path(f"{db}.week.pid"), Path(f"{db}.week.stop"), Path(f"{db}.week.log")
 
     def week_running(self) -> bool:
-        import os
-
         pid_file = self._week_files()[0]
         try:
-            os.kill(int(pid_file.read_text()), 0)
-            return True
+            return _process_alive(int(pid_file.read_text()))
         except (OSError, ValueError):
             return False
 

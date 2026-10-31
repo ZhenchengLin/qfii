@@ -23,7 +23,15 @@ async def test_page_and_status(app):
         status = (await c.get("/api/status")).json()
         assert status["cash_usd"] == 100000 and status["largest_allowed_order_usd"] == 10000
         assert status["models"]["neutral"] == "fake-strongest"
+        assert status["ui_mode"] == "ticker"   # the page offers ticker input by default
+        assert 'id="symbol"' in page.text
         assert (await c.get("/api/debates")).json() == []
+
+
+def test_week_config_shows_the_week_replay():
+    from qfii.config import load_config
+
+    assert load_config("configs/week.toml").ui_mode == "week"
 
 
 async def test_live_run_streams_events_then_appears_in_history(app):

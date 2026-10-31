@@ -62,3 +62,10 @@ def test_override_merges(tmp_path):
 def test_bad_config_rejected(tmp_path, text, msg):
     with pytest.raises(ConfigError, match=msg):
         load_config(write(tmp_path, text))
+
+
+def test_ui_mode(tmp_path):
+    assert load_config().ui_mode == "ticker"
+    assert load_config(write(tmp_path, '[ui]\nmode = "week"\n')).ui_mode == "week"
+    with pytest.raises(ConfigError, match="ui.mode"):
+        load_config(write(tmp_path, '[ui]\nmode = "slides"\n'))

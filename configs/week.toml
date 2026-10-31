@@ -19,3 +19,7 @@ db = "data/week-run.db"
 # on the committee as the neutral member.
 [committee]
 neutral_is_assessment = true
+
+# The website shows the week replay instead of ticker input.
+[ui]
+mode = "week"

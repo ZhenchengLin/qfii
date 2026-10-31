@@ -206,6 +206,11 @@ daily_order_cap = 5
 [execution]
 mode = "paper"
 
+# What the website shows: "ticker" = type a stock and watch its committee debate;
+# "week" = the bottom-up week replay (configs/week.toml).
+[ui]
+mode = "ticker"
+
 # Bottom-up week replay (`qfii week build`, `qfii week run`): `symbols` stocks
 # drawn at random (fixed seed) from the Nasdaq-100 are researched every
 # `cadence_minutes` of market time from `start` to `end`. Research rewrites a

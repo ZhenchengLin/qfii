@@ -23,6 +23,7 @@ INFO_REQUEST_RULES = ("any", "majority", "unanimous")
 EXECUTION_MODES = ("paper",)  # live trading is out of scope for v0.1
 PROVIDERS = ("fake", "ollama", "openai_compat")
 DATA_SOURCES = ("synthetic", "csv")
+UI_MODES = ("ticker", "week")
 
 
 class ConfigError(ValueError):
@@ -128,6 +129,7 @@ class Config:
     limits: Limits
     execution_mode: str
     week: Week
+    ui_mode: str = "ticker"
 
     def model_for(self, agent: str) -> ModelSpec:
         return self.models[self.agents[agent].tier]
@@ -275,6 +277,9 @@ def _build(raw: dict[str, Any]) -> Config:
     if mode not in EXECUTION_MODES:
         raise ConfigError(f"execution.mode must be one of {EXECUTION_MODES}, got {mode!r}")
 
+    if raw["ui"]["mode"] not in UI_MODES:
+        raise ConfigError(f"ui.mode must be one of {UI_MODES}, got {raw['ui']['mode']!r}")
+
     rt = raw["runtime"]
     if not isinstance(rt["exclusive_models"], bool):
         raise ConfigError("runtime.exclusive_models must be true or false")
@@ -322,6 +327,7 @@ def _build(raw: dict[str, Any]) -> Config:
         limits=limits,
         execution_mode=mode,
         week=_week(raw["week"]),
+        ui_mode=raw["ui"]["mode"],
     )
 
 
