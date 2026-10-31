@@ -19,6 +19,29 @@ $ErrorActionPreference = "Stop"
 
 function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cyan }
 
+# In Windows PowerShell 5 a native program's stderr becomes a terminating error
+# under "Stop" once redirected, so programs always run under "Continue" here and
+# are judged by their exit code.
+function Probe {
+    # Run a command only to look at it. Returns its stdout, or $null if it is
+    # missing or fails (e.g. the Microsoft Store's fake python.exe).
+    param([string]$Exe, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
+    $ErrorActionPreference = "Continue"
+    try {
+        $out = & $Exe @Rest 2>$null
+        if ($LASTEXITCODE -eq 0) { return $out }
+    } catch { }
+    return $null
+}
+
+function Run {
+    # Run a command that must succeed, showing its output.
+    param([string]$Exe, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest)
+    $ErrorActionPreference = "Continue"
+    & $Exe @Rest
+    if ($LASTEXITCODE -ne 0) { throw "failed: $Exe $($Rest -join ' ')" }
+}
+
 function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
@@ -30,7 +53,9 @@ function Need($cmd, $wingetId, $what) {
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         $answer = Read-Host "Install $what now with winget ($wingetId)? [Y/n]"
         if ($answer -eq "" -or $answer -match "^[Yy]") {
+            $ErrorActionPreference = "Continue"
             winget install -e --id $wingetId
+            $ErrorActionPreference = "Stop"
             Refresh-Path
         }
     }
@@ -43,13 +68,15 @@ function Find-Python {
     # the py launcher first (python.org installs), then python on PATH
     foreach ($v in "3.12", "3.13", "3.11") {
         if (Get-Command py -ErrorAction SilentlyContinue) {
-            $exe = & py "-$v" -c "import sys; print(sys.executable)" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $exe) { return $exe.Trim() }
+            $exe = Probe py "-$v" -c "import sys; print(sys.executable)"
+            if ($exe) { return "$exe".Trim() }
         }
     }
     if (Get-Command python -ErrorAction SilentlyContinue) {
-        $ok = & python -c "import sys; print(sys.version_info >= (3, 11))" 2>$null
-        if ($ok -eq "True") { return (& python -c "import sys; print(sys.executable)").Trim() }
+        $ok = Probe python -c "import sys; print(sys.version_info >= (3, 11))"
+        if ("$ok".Trim() -eq "True") {
+            return "$(Probe python -c 'import sys; print(sys.executable)')".Trim()
+        }
     }
     return $null
 }
@@ -64,8 +91,13 @@ Step "Checking Git, Python 3.11+ and Ollama"
 Need git "Git.Git" "Git"
 $python = Find-Python
 if (-not $python) {
-    Need winget "Microsoft.AppInstaller" "winget"
+    Write-Host "Python 3.11+ is not installed. Installing it with winget."
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw "winget not found. Install Python 3.12 from python.org, open a NEW PowerShell window and run this script again."
+    }
+    $ErrorActionPreference = "Continue"
     winget install -e --id Python.Python.3.12
+    $ErrorActionPreference = "Stop"
     Refresh-Path
     $python = Find-Python
     if (-not $python) { throw "Python 3.11+ not found. Open a NEW PowerShell window and run this script again." }
@@ -78,19 +110,17 @@ $docs = [Environment]::GetFolderPath("MyDocuments")
 $repo = Join-Path $docs "qfii"
 Step "Getting the code into $repo"
 if (Test-Path (Join-Path $repo ".git")) {
-    git -C $repo pull --ff-only
+    Run git -C $repo pull --ff-only
 } else {
-    git clone https://github.com/ZhenchengLin/qfii.git $repo
+    Run git clone https://github.com/ZhenchengLin/qfii.git $repo
 }
-if ($LASTEXITCODE -ne 0) { throw "git failed" }
 Set-Location $repo
 
 Step "Installing Qfii into .venv"
-if (-not (Test-Path ".venv\Scripts\python.exe")) { & $python -m venv .venv }
+if (-not (Test-Path ".venv\Scripts\python.exe")) { Run $python -m venv .venv }
 $vpy = Join-Path $repo ".venv\Scripts\python.exe"
-& $vpy -m pip install -q --upgrade pip
-& $vpy -m pip install -q -e ".[sec]"
-if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+Run $vpy -m pip install -q --upgrade pip
+Run $vpy -m pip install -q -e ".[sec]"
 $env:PYTHONUTF8 = "1"   # prompts and data files are UTF-8
 
 # ---------------------------------------------------------------- this PC
@@ -100,7 +130,7 @@ $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim()
 $gpu = ""
 $vramGB = 0
 if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
-    $line = nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits |
+    $line = Probe nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits |
             Select-Object -First 1
     if ($line) {
         $parts = $line -split ","
@@ -225,8 +255,7 @@ if (-not (Test-Path ".env.local")) {
 
 # ---------------------------------------------------------------- models
 Step "Downloading the models (several GB the first time)"
-& ollama list *> $null
-if ($LASTEXITCODE -ne 0) {
+if ($null -eq (Probe ollama list)) {
     Start-Process ollama -ArgumentList "serve" -WindowStyle Hidden
     Start-Sleep -Seconds 5
 }
@@ -236,18 +265,18 @@ foreach ($block in @($mid, $strong, $strongest)) {
 }
 foreach ($m in ($models | Select-Object -Unique)) {
     Write-Host "ollama pull $m"
-    & ollama pull $m
-    if ($LASTEXITCODE -ne 0) { throw "ollama pull $m failed" }
+    Run ollama pull $m
 }
 
 # ---------------------------------------------------------------- data + check
 if (-not $SkipData) {
     Step "Downloading prices (incl. SPY), FRED macro and SEC data"
-    & $vpy -m qfii.cli --config config.local.toml data fetch
+    # a failed download should not stop the setup: tools fetch what they can later
+    try { Run $vpy -m qfii.cli --config config.local.toml data fetch }
+    catch { Write-Host "Data download had a problem: $_" -ForegroundColor Yellow }
 }
 Step "Checking the configuration"
-& $vpy -m qfii.cli --config config.local.toml config
-if ($LASTEXITCODE -ne 0) { throw "qfii config check failed" }
+Run $vpy -m qfii.cli --config config.local.toml config
 
 # ---------------------------------------------------------------- shortcut
 $start = Join-Path $repo "scripts\windows-start.ps1"

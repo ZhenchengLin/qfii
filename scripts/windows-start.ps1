@@ -13,8 +13,10 @@ if (Test-Path ".env.local") {
 }
 
 # Ollama normally runs from the tray; start it if it is not answering
-& ollama list *> $null
-if ($LASTEXITCODE -ne 0) {
+$ErrorActionPreference = "Continue"   # a native program's stderr must not be fatal
+try { & ollama list 2>$null | Out-Null; $up = ($LASTEXITCODE -eq 0) } catch { $up = $false }
+$ErrorActionPreference = "Stop"
+if (-not $up) {
     Start-Process ollama -ArgumentList "serve" -WindowStyle Hidden
     Start-Sleep -Seconds 5
 }
@@ -24,4 +26,5 @@ if (-not (Test-Path $cfg)) { throw "config.local.toml not found: run scripts\win
 
 Start-Process powershell -WindowStyle Hidden -ArgumentList `
     "-NoProfile -Command Start-Sleep -Seconds 4; Start-Process 'http://127.0.0.1:3000/'"
+$ErrorActionPreference = "Continue"
 & .venv\Scripts\python.exe -m qfii.cli --config $cfg ui
