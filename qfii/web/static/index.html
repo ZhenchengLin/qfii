@@ -445,7 +445,7 @@ function renderOutcome(o) {
   const div = el("div", "outcome " + kind, text);
   const rounds = o.rounds || o.rounds_used || 0;
   div.append(el("small", null, o.type === "error" ? o.message
-    : rounds ? `after ${rounds} round(s)` : "the committee did not debate it"));
+    : o.reason ? o.reason : rounds ? `after ${rounds} round(s)` : "the committee did not debate it"));
   $("#rounds").append(div);
 }
 

@@ -91,3 +91,23 @@ async def test_openai_compat_empty_answer_at_length_cap_is_an_error():
     http = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)))
     with pytest.raises(LLMError, match="hidden reasoning"):
         await OpenAICompatLLM("http://x/v1", "m", http_client=http).complete("s", "u")
+
+
+async def test_format_is_stated_last_when_the_server_cannot_enforce_it():
+    from qfii.llm import FakeLLM, ScheduledLLM
+    from qfii.scheduler import SchedulerSettings
+
+    seen = {}
+
+    def respond(system, user):
+        seen["user"] = user
+        return "{}"
+
+    inner = FakeLLM(respond, "m")
+    schema = {"type": "object", "required": ["thesis"]}
+    settings = SchedulerSettings(exclusive=True, max_concurrent=1, settle_s=0, max_batch=8)
+    await ScheduledLLM(inner, settings, json_schema=False).complete("sys", "DATA", schema)
+    assert seen["user"].startswith("DATA") and seen["user"].endswith(
+        '{"type":"object","required":["thesis"]}')
+    await ScheduledLLM(inner, settings, json_schema=True).complete("sys", "DATA", schema)
+    assert seen["user"] == "DATA"   # enforced by the server: the prompt is untouched

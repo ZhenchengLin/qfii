@@ -327,7 +327,7 @@ class DebateServer:
                                      on_research=on_research, on_round=on_round,
                                      on_ballot=on_ballot, on_proposal=on_proposal)
             last = result.debate
-            run.emit({"type": "outcome", "outcome": result.outcome,
+            run.emit({"type": "outcome", "outcome": result.outcome, "reason": result.error,
                       "size_usd": last.size_usd if last else None,
                       "terms": ({"amendment_id": last.final.amendment_id, **last.final.amendment}
                                 if last and last.final and last.final.amendment else None),

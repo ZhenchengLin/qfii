@@ -115,6 +115,7 @@ class PaperRun:
     paper_id: int | None = None
     debate_id: int | None = None
     outcome: str = ""
+    error: str = ""     # why the paper stopped, when an agent failed
 
     @property
     def debate(self) -> DebateResult | None:
@@ -149,7 +150,8 @@ async def run_paper(cfg: Config, conn: sqlite3.Connection, symbol: str,
         if save:
             with conn:
                 transition(conn, paper_id, "deferred", "assessment", str(exc)[:500])
-        return PaperRun(packet, None, paper_id=paper_id, outcome="assessment_failed")
+        return PaperRun(packet, None, paper_id=paper_id, outcome="assessment_failed",
+                        error=str(exc))
     persist_calls("assessment", assessment.calls)
     if on_proposal:
         on_proposal(proposal, 1)

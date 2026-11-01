@@ -272,7 +272,13 @@ class ScheduledLLM:
         sched = scheduler_for_loop(self.settings)
         if hasattr(self.inner, "unload"):
             sched.register_unloader(self.key, lambda _key: self.inner.unload())
-        schema = schema if self.json_schema else None
+        if schema is not None and not self.json_schema:
+            # The server cannot enforce the format, and an instruction before thousands
+            # of tokens of data gets forgotten (R1 wrote Markdown essays): state it last.
+            user += ("\n\nReply now with ONE JSON object and nothing else: no Markdown, no "
+                     "headings, no text around it. It must match this JSON Schema:\n"
+                     + json.dumps(schema, separators=(",", ":")))
+            schema = None
         return await sched.run(self.key, lambda: self.inner.complete(system, user, schema))
 
     def __getattr__(self, name: str) -> Any:  # prompts, usd_per_m_*, etc.
